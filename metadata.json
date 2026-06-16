@@ -1,0 +1,6 @@
+{
+  "name": "CIMR Future Mirror",
+  "description": "Découvrez votre visage à 65 ans et évaluez votre préparation retraite avec l'expérience interactive de la CIMR.",
+  "requestFramePermissions": ["camera"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
