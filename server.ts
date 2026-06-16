@@ -3,6 +3,7 @@ import path from "path";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI, Type } from "@google/genai";
 import dotenv from "dotenv";
+import { initDb, insertLead, getAllLeads } from "./db";
 
 dotenv.config();
 
@@ -135,6 +136,45 @@ app.post("/api/gemini/analyze", async (req, res) => {
   }
 });
 
+// Enregistrer un nouveau lead (bilan retraite) dans PostgreSQL
+app.post("/api/leads", async (req, res) => {
+  try {
+    const { firstName, lastName, email, phone, age, score, category, answers, letter } = req.body;
+    
+    if (!email) {
+      return res.status(400).json({ error: "L'adresse email est requise." });
+    }
+
+    const leadId = await insertLead({
+      firstName: firstName || "",
+      lastName: lastName || "",
+      email: email,
+      phone: phone || "",
+      age: age ? parseInt(age, 10) : 0,
+      score: score ? parseInt(score, 10) : 0,
+      category: category || "A_RENFORCER",
+      answers: answers || {},
+      letter: letter || ""
+    });
+
+    res.json({ success: true, leadId });
+  } catch (error: any) {
+    console.error("Error saving lead to database:", error);
+    res.status(500).json({ error: "Une erreur est survenue lors de l'enregistrement de votre bilan." });
+  }
+});
+
+// Récupérer tous les leads de la base de données
+app.get("/api/leads", async (req, res) => {
+  try {
+    const leads = await getAllLeads();
+    res.json({ leads });
+  } catch (error: any) {
+    console.error("Error retrieving leads:", error);
+    res.status(500).json({ error: "Une erreur est survenue lors du chargement des bilans." });
+  }
+});
+
 // Helper function to calculate a mock score based on questionnaire answers
 function calculateMockScore(answers: any): number {
   if (!answers) return 55;
@@ -161,6 +201,9 @@ function calculateMockScore(answers: any): number {
 
 // Vite integration
 async function setupVite() {
+  // Initialize database tables
+  await initDb();
+
   if (process.env.NODE_ENV !== "production") {
     console.log("Setting up Vite dev server middleware...");
     const vite = await createViteServer({

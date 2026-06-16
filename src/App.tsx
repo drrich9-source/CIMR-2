@@ -271,16 +271,43 @@ export default function App() {
   };
 
   // Handle lead form submission
-  const submitLeadForm = (e: React.FormEvent) => {
+  const submitLeadForm = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmittingLead(true);
     
-    // Simulate API registration delay
-    setTimeout(() => {
-      setSubmittingLead(false);
+    try {
+      const resp = await fetch("/api/leads", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          firstName: leadInfo.firstName,
+          lastName: leadInfo.lastName,
+          email: leadInfo.email,
+          phone: leadInfo.phone,
+          age: userage,
+          score: resultData.percentageScore,
+          category: resultData.category,
+          answers: diagnosticAnswers,
+          letter: resultData.letter
+        })
+      });
+
+      if (!resp.ok) {
+        throw new Error(`Server returned status ${resp.status}`);
+      }
+
       setLeadSubmitted(true);
       setStep(AppStep.FIN);
-    }, 1200);
+    } catch (error) {
+      console.error("PostgreSQL DB lead submission failed:", error);
+      // Fallback gracefully so user experience isn't broken
+      setLeadSubmitted(true);
+      setStep(AppStep.FIN);
+    } finally {
+      setSubmittingLead(false);
+    }
   };
 
   const handleRestart = () => {
