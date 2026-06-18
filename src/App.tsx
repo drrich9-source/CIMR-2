@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import { startSnapOldAgeSession, stopActiveSnapSession } from "./utils/snapCamera";
 import { 
   Camera, QrCode, RefreshCw, User, Mail, Phone, ArrowRight, ArrowLeft, 
   CheckCircle, TrendingUp, Sparkles, Download, Info, X, Award, HelpCircle, 
@@ -21,6 +22,10 @@ export default function App() {
   const [agedPhoto, setAgedPhoto] = useState<string>(DEMO_PROFILES[0].oldPhoto);
   const [cameraActive, setCameraActive] = useState<boolean>(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
+  const [snapActive, setSnapActive] = useState<boolean>(false);
+  const [snapLoading, setSnapLoading] = useState<boolean>(false);
+  const [showSnapDiagnostics, setShowSnapDiagnostics] = useState<boolean>(false);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
   
   // Progress & calculations logic
   const [transformProgress, setTransformProgress] = useState<number>(0);
@@ -115,14 +120,23 @@ export default function App() {
     }
   }, [selectedProfileId, step]);
 
+  // Cleanup snapchat camera on unmount
+  useEffect(() => {
+    return () => {
+      stopActiveSnapSession();
+    };
+  }, []);
+
   // Turn on/off camera
   const startCamera = async () => {
     setCameraError(null);
     setCameraActive(true);
+    setSnapActive(false);
     try {
       if (streamRef.current) {
         streamRef.current.getTracks().forEach(t => t.stop());
       }
+      stopActiveSnapSession();
       
       const stream = await navigator.mediaDevices.getUserMedia({ 
         video: { width: 500, height: 500, facingMode: "user" } 
@@ -144,11 +158,73 @@ export default function App() {
       streamRef.current.getTracks().forEach(track => track.stop());
       streamRef.current = null;
     }
+    stopActiveSnapSession();
     setCameraActive(false);
+    setSnapActive(false);
   };
 
-  // Capture current webcam snapshot
+  // Start webcam, initialize Snapchat Camera Kit and apply the requested lens
+  const startSnapchatCamera = async () => {
+    setCameraError(null);
+    setCameraActive(true);
+    setSnapLoading(true);
+    setSnapActive(false);
+    try {
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(t => t.stop());
+      }
+      stopActiveSnapSession();
+
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        video: { width: 500, height: 500, facingMode: "user" } 
+      });
+      
+      streamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+      }
+
+      if (canvasRef.current) {
+        await startSnapOldAgeSession(stream, canvasRef.current);
+        setSnapActive(true);
+      } else {
+        throw new Error("Target canvas element is not ready.");
+      }
+    } catch (err: any) {
+      console.error("Snapchat Camera Kit failed", err);
+      const errorStr = String(err?.message || err || "");
+      if (errorStr.includes("permission denied") || errorStr.includes("[7]") || errorStr.includes("gRPC")) {
+        setCameraError("Erreur Snapchat [7] : Accès refusé (Permission Denied). Le domaine actuel ou votre clé Snap API Token n'a pas accès à la Lens sélectionnée.");
+      } else if (errorStr.includes("apiToken") || errorStr.includes("bootstrap")) {
+        setCameraError("Erreur d'initialisation Snapchat : Clé de validation API manquante ou invalide.");
+      } else {
+        setCameraError(`Impossible d'accéder à la caméra Snapchat : ${errorStr || "Vérifiez vos autorisations."}`);
+      }
+      setShowSnapDiagnostics(true);
+      setCameraActive(false);
+      setSnapActive(false);
+    } finally {
+      setSnapLoading(false);
+    }
+  };
+
+  // Capture current webcam or Snapchat filtered snapshot
   const capturePhoto = async () => {
+    if (snapActive && canvasRef.current) {
+      const photoData = canvasRef.current.toDataURL("image/jpeg");
+      setOriginalPhoto(photoData);
+      stopCamera();
+
+      // Pair with the high-quality configured aged avatar of the selected profile
+      const activeProfile = DEMO_PROFILES.find(p => p.id === selectedProfileId);
+      if (activeProfile) {
+        setAgedPhoto(activeProfile.oldPhoto);
+      } else {
+        setAgedPhoto(photoData);
+      }
+      return;
+    }
+
     if (videoRef.current && streamRef.current) {
       const canvas = document.createElement("canvas");
       canvas.width = 500;
@@ -674,7 +750,7 @@ export default function App() {
                       </p>
                     </div>
 
-                    {/* Camera view container */}
+                     {/* Camera view container */}
                     <div className="my-5 w-full flex justify-center">
                       <div className="w-72 h-72 rounded-2xl border border-dashed border-white/20 bg-black/40 overflow-hidden relative flex flex-col items-center justify-center shadow-xl">
                         
@@ -686,7 +762,20 @@ export default function App() {
                               playsInline
                               muted
                               className="w-full h-full object-cover scale-x-[-1]"
+                              style={{ display: !snapActive ? "block" : "none" }}
                             />
+                            <canvas
+                              ref={canvasRef}
+                              className="w-full h-full object-cover"
+                              style={{ display: snapActive ? "block" : "none" }}
+                            />
+                            {/* Snapchat Loading State Overlay */}
+                            {snapLoading && (
+                              <div className="absolute inset-0 bg-[#050A18]/80 flex flex-col items-center justify-center p-4 text-center z-30">
+                                <RefreshCw className="w-8 h-8 text-orange-400 animate-spin mb-2" />
+                                <p className="text-xs text-white/80 font-mono">Chargement de l'effet Snapchat...</p>
+                              </div>
+                            )}
                             {/* Scanning hud overlay */}
                             <div className="absolute inset-x-4 top-1/4 h-0.5 bg-blue-500/40 shadow-md animate-pulse" />
                             <div className="absolute bottom-4 left-4 right-4 flex justify-center">
@@ -699,7 +788,7 @@ export default function App() {
                             </div>
                           </>
                         ) : (
-                          <div className="p-5 text-center flex flex-col items-center justify-center h-full space-y-4">
+                          <div className="p-5 text-center flex flex-col items-center justify-center h-full space-y-4 w-full">
                             {originalPhoto ? (
                               <div className="relative w-full h-full">
                                 <img
@@ -707,7 +796,7 @@ export default function App() {
                                   alt="Portrait de base"
                                   className="w-full h-full object-cover rounded-xl"
                                 />
-                                <div className="absolute bottom-2 inset-x-2 flex justify-center gap-2">
+                                <div className="absolute bottom-2 inset-x-2 flex flex-col gap-2">
                                   <button
                                     onClick={startCamera}
                                     className="bg-black/80 hover:bg-black/90 text-white text-[10px] uppercase font-mono tracking-widest px-3 py-1.5 rounded-lg border border-white/10 text-center cursor-pointer"
@@ -717,18 +806,26 @@ export default function App() {
                                 </div>
                               </div>
                             ) : (
-                              <>
+                              <div className="flex flex-col items-center justify-center space-y-4 w-full px-4">
                                 <Camera className="w-12 h-12 text-white/20" />
                                 <p className="text-xs text-white/50 leading-normal max-w-[200px] font-light">
                                   Autorisez votre webcam pour vous voir en temps réel
                                 </p>
-                                <button
-                                  onClick={startCamera}
-                                  className="bg-white hover:bg-slate-100 text-[#050A18] font-bold px-4 py-2.5 rounded-xl text-xs flex items-center gap-1.5 transition active:scale-95 cursor-pointer"
-                                >
-                                  <Camera className="w-4 h-4" /> Activer ma caméra
-                                </button>
-                              </>
+                                <div className="flex flex-col gap-2 w-full">
+                                  <button
+                                    onClick={startCamera}
+                                    className="w-full bg-white hover:bg-slate-100 text-[#050A18] font-bold px-4 py-2.5 rounded-xl text-xs flex items-center justify-center gap-1.5 transition active:scale-95 cursor-pointer"
+                                  >
+                                    <Camera className="w-4 h-4" /> Activer ma caméra
+                                  </button>
+                                  <button
+                                    onClick={startSnapchatCamera}
+                                    className="w-full bg-[#FFFC00] hover:bg-[#e6e300] text-black font-bold px-4 py-2.5 rounded-xl text-xs flex items-center justify-center gap-1.5 transition active:scale-95 cursor-pointer"
+                                  >
+                                    <Sparkles className="w-4 h-4 text-slate-900" /> Open Snapchat Old Age
+                                  </button>
+                                </div>
+                              </div>
                             )}
                           </div>
                         )}
@@ -752,29 +849,37 @@ export default function App() {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-white/5 border border-white/10 p-4 rounded-2xl">
                       
                       {/* Left Block: Snapchat Lens Old age */}
-                      <div className="space-y-2 border-r border-white/10 pr-1 md:pr-4">
-                        <span className="text-[10px] font-mono font-bold text-orange-400 uppercase tracking-widest block">
-                          Filtre Snapchat Old
-                        </span>
-                        <p className="text-[11px] text-white/70 leading-normal font-light">
-                          Préférez-vous utiliser le filtre officiel Snapchat? Scannez de votre smartphone ou ouvrez.
-                        </p>
+                      <div className="space-y-4 border-r border-white/10 pr-1 md:pr-4 flex flex-col justify-between">
+                        <div>
+                          <span className="text-[10px] font-mono font-bold text-orange-400 uppercase tracking-widest block">
+                            Filtre Snapchat Old
+                          </span>
+                          <p className="text-[11px] text-white/70 leading-normal font-light">
+                            Utilisez le filtre officiel Snapchat directement dans la borne ou scannez le code pour l'essayer sur votre smartphone.
+                          </p>
+                        </div>
                         
                         <div className="flex items-center gap-3 pt-1">
-                          <div className="bg-white p-1 rounded-lg">
+                          <div className="bg-white p-1 rounded-lg shrink-0">
                             {/* Stylized simulated QR Code rendering */}
                             <QrCode className="w-14 h-14 text-slate-900" />
                           </div>
-                          <div className="flex flex-col gap-1.5">
+                          <div className="flex flex-col gap-1.5 w-full">
+                            <button
+                              onClick={startSnapchatCamera}
+                              type="button"
+                              className="w-full text-[11px] bg-[#FFFC00] hover:bg-[#e6e300] text-black font-bold px-3 py-2 rounded-xl inline-flex items-center justify-center gap-1.5 transition active:scale-95 cursor-pointer shadow-md"
+                            >
+                              <Sparkles className="w-3.5 h-3.5 text-black" /> Open Snapchat Old Age
+                            </button>
                             <a
                               href="https://www.snapchat.com/lens/a375b6d69d0c4feda05a84e0ab58e471?sender_web_id=fdc91e89-bdd9-43fd-918d-4fa2483e986a&device_type=desktop&is_copy_url=true"
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="text-[11px] bg-[#FFFC00] hover:bg-[#e6e300] text-black font-bold px-3 py-1.5 rounded-lg inline-flex items-center justify-center gap-1"
+                              className="text-[10px] text-white/50 hover:text-white underline text-center"
                             >
-                              <QrCode className="w-3.5 h-3.5" /> Ouvrir Snapchat Old
+                              Ouvrir sur Snap.com ↗
                             </a>
-                            <span className="text-[9px] font-mono text-white/40">@CIMR Snapchat integration</span>
                           </div>
                         </div>
                       </div>
@@ -806,6 +911,105 @@ export default function App() {
                           </button>
                         </div>
                       </div>
+                    </div>
+
+                    {/* Collapsible Snapchat API Diagnostic & Setup Guide */}
+                    <div className="mt-4 bg-[#FFFC00]/5 border border-[#FFFC00]/20 rounded-2xl p-4 text-left space-y-3">
+                      <div className="flex items-start justify-between">
+                        <div className="flex items-center gap-2">
+                          <Sparkles className="w-4 h-4 text-[#FFFC00]" />
+                          <h4 className="text-xs font-mono font-bold text-white uppercase tracking-wider">
+                            Guide Diagnostique Snapchat AR Kit
+                          </h4>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setShowSnapDiagnostics(!showSnapDiagnostics)}
+                          className="text-[10px] text-white/50 hover:text-white underline font-mono cursor-pointer"
+                        >
+                          {showSnapDiagnostics ? "Masquer" : "Afficher les détails & solutions"}
+                        </button>
+                      </div>
+                      
+                      {showSnapDiagnostics && (
+                        <div className="text-[11px] text-white/80 space-y-3 font-light leading-relaxed">
+                          <p>
+                            L'erreur <code className="bg-white/10 px-1 rounded text-[#FFFC00] font-mono">[7] Permission Denied</code> indique qu'un conflit d'autorisation se produit au chargement de la Lens AR. Cela signifie généralement que l'API Token n'est pas autorisé pour le nom de domaine actuel de l'application ou n'a pas accès à la ressource.
+                          </p>
+                          
+                          <div className="bg-black/40 border border-white/10 rounded-xl p-3 space-y-2">
+                            <span className="text-[10px] uppercase font-mono tracking-wider text-orange-400 block font-bold">
+                              Étape 1 : Autoriser les domaines du projet
+                            </span>
+                            <p className="text-white/70">
+                              Connectez-vous sur votre portail de développement <strong><a href="https://camera-kit.snapchat.com" target="_blank" rel="noopener noreferrer" className="underline text-[#FFFC00] hover:text-[#FFFC00]/80">camera-kit.snapchat.com ↗</a></strong>, sélectionnez votre clé d'API, et ajoutez exactement ces noms de domaine d'exécution autorisés :
+                            </p>
+                            <div className="space-y-1 font-mono text-[10px] bg-white/5 p-2 rounded border border-white/5">
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="text-blue-400 select-all overflow-hidden text-ellipsis">ais-dev-3wl64nx4rasky3i4juxieu-941643780074.europe-west2.run.app</span>
+                                <button
+                                  type="button"
+                                  onClick={() => navigator.clipboard.writeText("ais-dev-3wl64nx4rasky3i4juxieu-941643780074.europe-west2.run.app")}
+                                  className="text-[9px] hover:text-[#FFFC00] text-white/40 cursor-pointer underline shrink-0"
+                                >
+                                  Copier
+                                </button>
+                              </div>
+                              <div className="flex items-center justify-between gap-2 border-t border-white/5 pt-1 mt-1">
+                                <span className="text-blue-400 select-all overflow-hidden text-ellipsis">ais-pre-3wl64nx4rasky3i4juxieu-941643780074.europe-west2.run.app</span>
+                                <button
+                                  type="button"
+                                  onClick={() => navigator.clipboard.writeText("ais-pre-3wl64nx4rasky3i4juxieu-941643780074.europe-west2.run.app")}
+                                  className="text-[9px] hover:text-[#FFFC00] text-white/40 cursor-pointer underline shrink-0"
+                                >
+                                  Copier
+                                </button>
+                              </div>
+                              <div className="flex items-center justify-between gap-2 border-t border-white/5 pt-1 mt-1">
+                                <span className="text-blue-400 select-all">localhost</span>
+                                <button
+                                  type="button"
+                                  onClick={() => navigator.clipboard.writeText("localhost")}
+                                  className="text-[9px] hover:text-[#FFFC00] text-white/40 cursor-pointer underline shrink-0"
+                                >
+                                  Copier
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="bg-black/40 border border-white/10 rounded-xl p-3 space-y-2">
+                            <span className="text-[10px] uppercase font-mono tracking-wider text-orange-400 block font-bold">
+                              Étape 2 : Configurer les Variables d'Environnement
+                            </span>
+                            <p className="text-white/70">
+                              Si vous testez à l'aide de vos propres maquettes Snapchat Camera Kit, vous pouvez également configurer votre propre Lens / ID de filtre dans vos secrets ou vos variables locales :
+                            </p>
+                            <table className="w-full text-left font-mono text-[10px] text-white/60">
+                              <thead>
+                                <tr className="border-b border-white/10">
+                                  <th className="py-1 text-[#FFFC00] font-normal">Variable</th>
+                                  <th className="py-1 text-[#FFFC00] font-normal">Rôle</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                <tr>
+                                  <td className="py-1 select-all font-semibold text-white">VITE_SNAP_API_TOKEN</td>
+                                  <td className="py-1">Jeton d'API de validation client</td>
+                                </tr>
+                                <tr>
+                                  <td className="py-1 select-all font-semibold text-white">VITE_SNAP_LENS_ID</td>
+                                  <td className="py-1">ID du filtre Snapchat</td>
+                                </tr>
+                                <tr>
+                                  <td className="py-1 select-all font-semibold text-white">VITE_SNAP_LENS_GROUP_ID</td>
+                                  <td className="py-1">ID du groupe associé</td>
+                                </tr>
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      )}
                     </div>
 
                     {/* Simple user settings input box to configure letter simulation */}

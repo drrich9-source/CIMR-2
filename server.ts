@@ -225,6 +225,15 @@ app.get("/api/db/status", async (req, res) => {
   }
 });
 
+// Récupérer la configuration de l'API Snapchat de manière dynamique et sécurisée
+app.get("/api/config", (req, res) => {
+  res.json({
+    snapApiToken: process.env.VITE_SNAP_API_TOKEN || process.env.SNAP_API_TOKEN || "",
+    snapLensId: process.env.VITE_SNAP_LENS_ID || process.env.SNAP_LENS_ID || "a375b6d69d0c4feda05a84e0ab58e471",
+    snapLensGroupId: process.env.VITE_SNAP_LENS_GROUP_ID || process.env.SNAP_LENS_GROUP_ID || "4721ae08-26c8-496e-bdd1-5ab2ebf87460"
+  });
+});
+
 // Exporter les données PostgreSQL en fichier CSV (site leads data file)
 app.get("/api/leads/export", async (req, res) => {
   try {
