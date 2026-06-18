@@ -3,7 +3,7 @@ import path from "path";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI, Type } from "@google/genai";
 import dotenv from "dotenv";
-import { initDb, insertLead, getAllLeads } from "./db";
+import { initDb, insertLead, getAllLeads, getDbStatus } from "./db";
 
 dotenv.config();
 
@@ -31,7 +31,7 @@ function getGeminiClient(): GoogleGenAI {
 const app = express();
 const PORT = 3000;
 
-app.use(express.json());
+app.use(express.json({ limit: "15mb" }));
 
 // API routes first
 app.post("/api/gemini/analyze", async (req, res) => {
@@ -157,6 +157,39 @@ app.post("/api/leads", async (req, res) => {
       letter: letter || ""
     });
 
+    // Sync to remote Railway Primary instance
+    const railwayApiUrl = process.env.RAILWAY_API_URL;
+    if (railwayApiUrl) {
+      console.log(`📬 Synclink: Sending lead to ${railwayApiUrl}/api/leads`);
+      fetch(`${railwayApiUrl}/api/leads`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          firstName: firstName || "",
+          lastName: lastName || "",
+          email: email,
+          phone: phone || "",
+          age: age ? parseInt(age, 10) : 0,
+          score: score ? parseInt(score, 10) : 0,
+          category: category || "A_RENFORCER",
+          answers: answers || {},
+          letter: letter || ""
+        })
+      })
+      .then(async (r) => {
+        if (r.ok) {
+          console.log(`✅ Status 200: Lead synced to Railway production successfully.`);
+        } else {
+          console.warn(`⚠️ Status ${r.status}: Sync payload rejected on production server.`);
+        }
+      })
+      .catch((err) => {
+        console.error(`❌ Sync Network Error: Could not reach live Railway domain:`, err.message);
+      });
+    }
+
     res.json({ success: true, leadId });
   } catch (error: any) {
     console.error("Error saving lead to database:", error);
@@ -172,6 +205,67 @@ app.get("/api/leads", async (req, res) => {
   } catch (error: any) {
     console.error("Error retrieving leads:", error);
     res.status(500).json({ error: "Une erreur est survenue lors du chargement des bilans." });
+  }
+});
+
+// Récupérer le statut de la base de données
+app.get("/api/db/status", async (req, res) => {
+  try {
+    const status = getDbStatus();
+    const leads = await getAllLeads().catch(() => []);
+    const railwayUrl = process.env.RAILWAY_API_URL || "";
+    res.json({ 
+      ...status, 
+      count: leads.length,
+      railwayUrl,
+      syncEnabled: !!railwayUrl
+    });
+  } catch (err) {
+    res.json({ connected: false, fallback: true, host: "Error", count: 0, railwayUrl: "", syncEnabled: false });
+  }
+});
+
+// Exporter les données PostgreSQL en fichier CSV (site leads data file)
+app.get("/api/leads/export", async (req, res) => {
+  try {
+    const leads = await getAllLeads();
+    
+    // Construct CSV Header and rows
+    const headers = [
+      "ID",
+      "Date de creation",
+      "Prenom",
+      "Nom",
+      "Email",
+      "Telephone",
+      "Age",
+      "Score Diagnostic (%)",
+      "Categorie"
+    ];
+    
+    const rows = leads.map((lead: any) => [
+      lead.id,
+      lead.created_at ? new Date(lead.created_at).toISOString() : "",
+      `"${(lead.first_name || "").replace(/"/g, '""')}"`,
+      `"${(lead.last_name || "").replace(/"/g, '""')}"`,
+      `"${(lead.email || "").replace(/"/g, '""')}"`,
+      `"${(lead.phone || "").replace(/"/g, '""')}"`,
+      lead.age || 0,
+      lead.score || 0,
+      lead.category || ""
+    ]);
+    
+    const csvContent = "\uFEFF" + [
+      headers.join(","),
+      ...rows.map(row => row.join(","))
+    ].join("\n");
+    
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", 'attachment; filename="leads_cimr_database.csv"');
+    res.send(csvContent);
+  } catch (error: any) {
+    console.error("Failed to export leads:", error);
+    res.status(500).send("Erreur lors de la génération du fichier.");
   }
 });
 

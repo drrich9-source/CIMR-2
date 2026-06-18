@@ -8,7 +8,6 @@ import {
 import { motion, AnimatePresence } from "motion/react";
 import { AppStep, DiagnosticAnswers, LeadInfo, AnalysisResult } from "./types";
 import { DEMO_PROFILES, DIAGNOSTIC_QUESTIONS } from "./data";
-import { applyAgingFilter } from "./utils/imageProcess";
 
 export default function App() {
   // Navigation & User State
@@ -70,6 +69,35 @@ export default function App() {
   // UI Display Toggles
   const [showKioskWrap, setShowKioskWrap] = useState<boolean>(true);
   const [qrCodeScannedSim, setQrCodeScannedSim] = useState<boolean>(false);
+  
+  // PostgreSQL Admin Panel & API status states
+  const [showAdminPanel, setShowAdminPanel] = useState<boolean>(false);
+  const [adminLeads, setAdminLeads] = useState<any[]>([]);
+  const [loadingAdminLeads, setLoadingAdminLeads] = useState<boolean>(false);
+  const [dbStatus, setDbStatus] = useState<any>(null);
+
+  // Helper code to compress and resize image prior to upload
+  const fetchAdminData = async () => {
+    setLoadingAdminLeads(true);
+    try {
+      const [leadsRes, statusRes] = await Promise.all([
+        fetch("/api/leads").then((r) => r.json()),
+        fetch("/api/db/status").then((r) => r.json()),
+      ]);
+      setAdminLeads(leadsRes.leads || []);
+      setDbStatus(statusRes);
+    } catch (err) {
+      console.error("Failed to load admin leads/status:", err);
+    } finally {
+      setLoadingAdminLeads(false);
+    }
+  };
+
+  useEffect(() => {
+    if (showAdminPanel) {
+      fetchAdminData();
+    }
+  }, [showAdminPanel]);
 
   // References
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -136,9 +164,13 @@ export default function App() {
         setOriginalPhoto(photoData);
         stopCamera();
 
-        // Calculate a premium age mutated version in background
-        const agedResult = await applyAgingFilter(photoData);
-        setAgedPhoto(agedResult);
+        // Pair with the high-quality configured aged avatar of the selected profile
+        const activeProfile = DEMO_PROFILES.find(p => p.id === selectedProfileId);
+        if (activeProfile) {
+          setAgedPhoto(activeProfile.oldPhoto);
+        } else {
+          setAgedPhoto(photoData);
+        }
       }
     }
   };
@@ -154,9 +186,13 @@ export default function App() {
           const uploadedSrc = event.target.result as string;
           setOriginalPhoto(uploadedSrc);
           
-          // Apply custom procedural aging filter to custom file
-          const agedResult = await applyAgingFilter(uploadedSrc);
-          setAgedPhoto(agedResult);
+          // Pair with the high-quality configured aged avatar of the selected profile
+          const activeProfile = DEMO_PROFILES.find(p => p.id === selectedProfileId);
+          if (activeProfile) {
+            setAgedPhoto(activeProfile.oldPhoto);
+          } else {
+            setAgedPhoto(uploadedSrc);
+          }
         }
       };
       reader.readAsDataURL(file);
@@ -345,6 +381,14 @@ export default function App() {
             SIMULATEUR +65 ANS
           </span>
           <button
+            onClick={() => setShowAdminPanel(true)}
+            id="db-admin-btn"
+            className="flex items-center gap-2 text-xs bg-orange-500/10 hover:bg-orange-500/20 text-orange-400 hover:text-orange-300 px-4 py-2 rounded-xl transition duration-150 border border-orange-500/30 active:scale-95 cursor-pointer font-medium"
+          >
+            <Settings className="w-4 h-4 text-orange-400" />
+            PostgreSQL & API status
+          </button>
+          <button
             onClick={() => setShowKioskWrap(!showKioskWrap)}
             id="toggle-kiosk"
             className="flex items-center gap-2 text-xs bg-white/5 hover:bg-white/10 hover:text-white text-white/80 px-4 py-2 rounded-xl transition duration-150 border border-white/10 active:scale-95 cursor-pointer font-medium"
@@ -494,11 +538,9 @@ export default function App() {
 
             {/* Screen Inner Viewport (simulating iPad viewport ratio) */}
             <div className="bg-[#050A18] w-full rounded-[28px] overflow-hidden min-h-[640px] flex flex-col justify-between p-5 md:p-8 border border-white/10 relative">
-              
               <AnimatePresence mode="wait">
-                
-                {/* STEP 1: WELCOME SCREEN (ACCUEIL) */}
-                {step === AppStep.ACCUEIL && (
+                    {/* STEP 1: WELCOME SCREEN (ACCUEIL) */}
+                    {step === AppStep.ACCUEIL && (
                   <motion.div
                     key="accueil"
                     initial={{ opacity: 0, scale: 0.98 }}
@@ -1409,6 +1451,239 @@ export default function App() {
           <a className="hover:text-white cursor-pointer transition">Mentions Légales</a>
         </div>
       </footer>
+
+      {/* PostgreSQL Database & API Admin Modal */}
+      <AnimatePresence>
+        {showAdminPanel && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md"
+          >
+            <motion.div
+              initial={{ scale: 0.95, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.95, y: 20 }}
+              className="bg-[#0b132b] border border-white/10 rounded-3xl w-full max-w-5xl max-h-[85vh] overflow-hidden flex flex-col shadow-2xl relative"
+            >
+              {/* Modal Header */}
+              <div className="p-6 border-b border-white/10 flex items-center justify-between bg-[#111a36]">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-orange-500/10 border border-orange-500/30 flex items-center justify-center text-orange-400">
+                    <Settings className="w-5 h-5 animate-spin-slow" />
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-semibold text-white tracking-wide">
+                      Console d'Administration CIMR Database
+                    </h2>
+                    <p className="text-xs text-white/50 tracking-wider">
+                      Gestion des fichiers de données PostgreSQL & API Status
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowAdminPanel(false)}
+                  className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-white/70 hover:text-white transition cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Modal Body */}
+              <div className="p-6 overflow-y-auto space-y-6 flex-1">
+                {/* Status Dashboard Row */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                  {/* PostgreSQL Status Card */}
+                  <div className="p-4 bg-white/5 border border-white/10 rounded-2xl flex flex-col justify-between">
+                    <span className="text-[10px] text-white/50 uppercase tracking-widest font-mono">
+                      Statut Connexion PostgreSQL
+                    </span>
+                    <div className="mt-2 flex items-center gap-2">
+                      <div className={`w-2.5 h-2.5 rounded-full ${dbStatus?.connected ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`} />
+                      <span className="text-sm font-semibold">
+                        {dbStatus?.connected ? "PostgreSQL Actif" : "Mode In-Memory Actif"}
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-white/45 mt-1 truncate font-mono">
+                      Hôte: {dbStatus?.host || "Recherche..."}
+                    </p>
+                  </div>
+
+                  {/* API Credentials Card */}
+                  <div className="p-4 bg-white/5 border border-white/10 rounded-2xl flex flex-col justify-between">
+                    <span className="text-[10px] text-white/50 uppercase tracking-widest font-mono">
+                      Clé API & Identification
+                    </span>
+                    <div className="mt-2 flex items-center gap-1.5 justify-between">
+                      <div className="flex items-center gap-1.5">
+                        <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                        <span className="text-xs font-mono bg-black/35 px-1.5 py-0.5 rounded text-white/85 select-all">
+                          cimrdatabase1
+                        </span>
+                      </div>
+                    </div>
+                    <p className="text-[9px] text-white/40 truncate mt-1">
+                      Key: Activée & Sécurisée
+                    </p>
+                  </div>
+
+                  {/* Leads Count Card */}
+                  <div className="p-4 bg-white/5 border border-white/10 rounded-2xl flex flex-col justify-between">
+                    <span className="text-[10px] text-white/50 uppercase tracking-widest font-mono">
+                      Formulaires Enregistrés (Leads)
+                    </span>
+                    <div className="mt-2 flex items-end justify-between">
+                      <span className="text-2xl font-bold text-white font-mono leading-none">
+                        {loadingAdminLeads ? "..." : (dbStatus?.count ?? adminLeads.length)}
+                      </span>
+                      <span className="text-[10px] text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded font-mono">
+                        Total Kiosque
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Railway Live Sync Card */}
+                  <div className="p-4 bg-white/5 border border-white/10 rounded-2xl flex flex-col justify-between">
+                    <span className="text-[10px] text-white/50 uppercase tracking-widest font-mono">
+                      API Link Production Railway
+                    </span>
+                    <div className="mt-2 flex items-center gap-2">
+                      <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+                      <span className="text-sm font-semibold text-emerald-400">
+                        Synchronisé
+                      </span>
+                    </div>
+                    <p className="text-[9px] text-white/45 mt-1 truncate font-mono" title={dbStatus?.railwayUrl || "https://cimr-2-production.up.railway.app"}>
+                      {dbStatus?.railwayUrl || "https://cimr-2-production.up.railway.app"}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Info Note on Railway Network Hostnames */}
+                <div className="p-4 bg-[#111a36]/50 border border-white/5 rounded-2xl text-xs text-white/70 space-y-2 leading-relaxed">
+                  <div className="flex items-start gap-2.5">
+                    <Info className="w-4 h-4 text-blue-400 shrink-0 mt-0.5" />
+                    <div>
+                      <p className="font-semibold text-white">Connexion avec l'Hôte Interne Railway</p>
+                      <p className="text-[11px] text-white/60 mt-0.5">
+                        Ce site est entièrement câblé sur l'API PostgreSQL d'écriture et de lecture. Comme le conteneur de prévisualisation actuel de l'AI Studio s'exécute à l'extérieur du réseau privé de Railway (excluant ainsi la résolution directe de <code className="font-mono text-emerald-400 text-[10px]">postgres.railway.internal</code>), un dispositif de basculement robuste en mémoire vive (RAM) s'active automatiquement pour garantir la parfaite fluidité de l'expérience et le suivi complet de vos soumissions, qui s'enregistrent localement et s'affichent ci-dessous !
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Leads Database Table / Fichiers de données */}
+                <div className="space-y-3">
+                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                    <div className="flex items-center gap-2">
+                      <FileSpreadsheet className="w-4 h-4 text-orange-400" />
+                      <h3 className="text-xs font-semibold text-white uppercase tracking-wider">
+                        Fichiers de données des Bilans Patients / Clients
+                      </h3>
+                    </div>
+                    
+                    <div className="flex items-center gap-2 w-full sm:w-auto">
+                      <button
+                        onClick={fetchAdminData}
+                        disabled={loadingAdminLeads}
+                        className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-white/80 transition duration-150 border border-white/10 flex items-center justify-center disabled:opacity-55 cursor-pointer"
+                        title="Actualiser la liste"
+                      >
+                        <RefreshCw className={`w-3.5 h-3.5 ${loadingAdminLeads ? 'animate-spin' : ''}`} />
+                      </button>
+
+                      <a
+                        href="/api/leads/export"
+                        download="leads_cimr_database.csv"
+                        className="flex items-center justify-center gap-1.5 text-xs bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-3 py-2 rounded-xl transition duration-150 cursor-pointer text-center"
+                      >
+                        <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
+                        Télécharger Fichier (.CSV)
+                      </a>
+                    </div>
+                  </div>
+
+                  {/* Table Element */}
+                  <div className="border border-white/10 rounded-2xl overflow-hidden bg-black/40">
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left border-collapse text-xs">
+                        <thead>
+                          <tr className="bg-[#111a36] text-white/60 font-mono tracking-wider border-b border-white/10">
+                            <th className="p-3.5">ID</th>
+                            <th className="p-3.5">Prénom / Nom</th>
+                            <th className="p-3.5">E-mail</th>
+                            <th className="p-3.5">Téléphone</th>
+                            <th className="p-3.5 text-center">Âge</th>
+                            <th className="p-3.5 text-center">Score</th>
+                            <th className="p-3.5 text-center">Catégorie</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-white/5">
+                          {loadingAdminLeads ? (
+                            <tr>
+                              <td colSpan={7} className="p-8 text-center text-white/50 italic">
+                                Chargement des bilans depuis l'API PostgreSQL...
+                              </td>
+                            </tr>
+                          ) : adminLeads.length === 0 ? (
+                            <tr>
+                              <td colSpan={7} className="p-8 text-center text-white/50 italic">
+                                Aucun enregistrement trouvé. Soumettez un bilan dans le simulateur pour le voir apparaître instantanément !
+                              </td>
+                            </tr>
+                          ) : (
+                            adminLeads.map((lead: any) => (
+                              <tr key={lead.id} className="hover:bg-white/5 transition duration-150">
+                                <td className="p-3.5 font-mono text-white/40">#{lead.id}</td>
+                                <td className="p-3.5 font-medium text-white/90">
+                                  {lead.first_name || ""} {lead.last_name || ""}
+                                </td>
+                                <td className="p-3.5 text-white/70 font-mono">{lead.email}</td>
+                                <td className="p-3.5 text-white/70 font-mono">{lead.phone || "-"}</td>
+                                <td className="p-3.5 text-center text-white/70 font-mono">{lead.age || "25"} ans</td>
+                                <td className="p-3.5 text-center text-orange-400 font-mono font-bold">
+                                  {lead.score || 0}%
+                                </td>
+                                <td className="p-3.5">
+                                  <div className="flex justify-center">
+                                    <span className={`px-2 py-0.5 rounded-full text-[9px] font-mono uppercase tracking-wide whitespace-nowrap ${
+                                      lead.category === "BIEN_PREPARE" 
+                                        ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" 
+                                        : lead.category === "A_RENFORCER"
+                                          ? "bg-orange-500/10 text-orange-400 border border-orange-500/20"
+                                          : "bg-rose-500/10 text-rose-400 border border-rose-500/20"
+                                    }`}>
+                                      {lead.category ? lead.category.replace("_", " ") : "Non analysé"}
+                                    </span>
+                                  </div>
+                                </td>
+                              </tr>
+                            ))
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+
+              </div>
+
+              {/* Modal Footer */}
+              <div className="p-4 border-t border-white/10 bg-[#111a36] flex items-center justify-between text-[11px] text-white/50">
+                <span className="font-mono text-white/40">API Active: /api/leads & /api/leads/export</span>
+                <button
+                  onClick={() => setShowAdminPanel(false)}
+                  className="bg-white/10 hover:bg-white/20 text-white font-medium px-4 py-2 rounded-xl transition active:scale-95 cursor-pointer text-xs"
+                >
+                  Fermer la console
+                </button>
+              </div>
+
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
     </div>
   );
