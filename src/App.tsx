@@ -4,7 +4,7 @@ import {
   Camera, QrCode, RefreshCw, User, Mail, Phone, ArrowRight, ArrowLeft, 
   CheckCircle, TrendingUp, Sparkles, Download, Info, X, Award, HelpCircle, 
   Briefcase, Calendar, ChevronRight, Monitor, Check, Activity, ShieldCheck, 
-  Users, BarChart2, Star, Percent, Settings, FileSpreadsheet
+  Users, BarChart2, Star, Percent, Settings, FileSpreadsheet, AlertTriangle
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { AppStep, DiagnosticAnswers, LeadInfo, AnalysisResult } from "./types";
@@ -20,6 +20,94 @@ export default function App() {
   // Photo capture states
   const [originalPhoto, setOriginalPhoto] = useState<string>(DEMO_PROFILES[0].youngPhoto);
   const [agedPhoto, setAgedPhoto] = useState<string>(DEMO_PROFILES[0].oldPhoto);
+  const [isAgeifying, setIsAgeifying] = useState<boolean>(false);
+  const [ageifyError, setAgeifyError] = useState<string | null>(null);
+
+  // Client-side image optimization to support JPG, PNG, WEBP and resize max dimension to 800px
+  const optimizeImage = (dataUrl: string, maxWidth = 800, maxHeight = 800): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.crossOrigin = "Anonymous";
+      img.onload = () => {
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > maxWidth) {
+            height = Math.round((height * maxWidth) / width);
+            width = maxWidth;
+          }
+        } else {
+          if (height > maxHeight) {
+            width = Math.round((width * maxHeight) / height);
+            height = maxHeight;
+          }
+        }
+
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+          resolve(dataUrl);
+          return;
+        }
+
+        ctx.drawImage(img, 0, 0, width, height);
+        // Compress as high-quality JPEG format with 0.8 quality
+        const optimizedDataUrl = canvas.toDataURL("image/jpeg", 0.8);
+        resolve(optimizedDataUrl);
+      };
+      img.onerror = (err) => {
+        reject(err);
+      };
+      img.src = dataUrl;
+    });
+  };
+
+  const processAgeifyImage = async (imageSrc: string) => {
+    if (!imageSrc) return;
+    
+    // Skip if it's dynamic asset link from young demo profiles to prevent unwanted API requests
+    if (imageSrc.startsWith("/") && !imageSrc.startsWith("data:")) {
+      return; 
+    }
+    
+    setIsAgeifying(true);
+    setAgeifyError(null);
+    try {
+      // 10. Optimize image size before upload
+      const optimizedBase64 = await optimizeImage(imageSrc, 800, 800);
+      
+      // Send the image to the backend endpoint POST /api/ageify
+      const response = await fetch("/api/ageify", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ image: optimizedBase64 }),
+      });
+
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.error || "Une erreur s'est produite lors de la transformation.");
+      }
+
+      const data = await response.json();
+      if (data.success && data.imageUrl) {
+        setAgedPhoto(data.imageUrl);
+      } else {
+        throw new Error("L'image de vieillissement n'a pas pu être générée.");
+      }
+    } catch (err: any) {
+      console.error("AI aging error:", err);
+      setAgeifyError(err?.message || "Une erreur inconnue est survenue.");
+    } finally {
+      setIsAgeifying(false);
+    }
+  };
+
   const [cameraActive, setCameraActive] = useState<boolean>(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [snapActive, setSnapActive] = useState<boolean>(false);
@@ -210,18 +298,12 @@ export default function App() {
 
   // Capture current webcam or Snapchat filtered snapshot
   const capturePhoto = async () => {
+    setSelectedProfileId("custom");
     if (snapActive && canvasRef.current) {
       const photoData = canvasRef.current.toDataURL("image/jpeg");
       setOriginalPhoto(photoData);
       stopCamera();
-
-      // Pair with the high-quality configured aged avatar of the selected profile
-      const activeProfile = DEMO_PROFILES.find(p => p.id === selectedProfileId);
-      if (activeProfile) {
-        setAgedPhoto(activeProfile.oldPhoto);
-      } else {
-        setAgedPhoto(photoData);
-      }
+      await processAgeifyImage(photoData);
       return;
     }
 
@@ -239,14 +321,7 @@ export default function App() {
         const photoData = canvas.toDataURL("image/jpeg");
         setOriginalPhoto(photoData);
         stopCamera();
-
-        // Pair with the high-quality configured aged avatar of the selected profile
-        const activeProfile = DEMO_PROFILES.find(p => p.id === selectedProfileId);
-        if (activeProfile) {
-          setAgedPhoto(activeProfile.oldPhoto);
-        } else {
-          setAgedPhoto(photoData);
-        }
+        await processAgeifyImage(photoData);
       }
     }
   };
@@ -256,19 +331,13 @@ export default function App() {
     const file = e.target.files?.[0];
     if (file) {
       stopCamera();
+      setSelectedProfileId("custom");
       const reader = new FileReader();
       reader.onload = async (event) => {
         if (event.target?.result) {
           const uploadedSrc = event.target.result as string;
           setOriginalPhoto(uploadedSrc);
-          
-          // Pair with the high-quality configured aged avatar of the selected profile
-          const activeProfile = DEMO_PROFILES.find(p => p.id === selectedProfileId);
-          if (activeProfile) {
-            setAgedPhoto(activeProfile.oldPhoto);
-          } else {
-            setAgedPhoto(uploadedSrc);
-          }
+          await processAgeifyImage(uploadedSrc);
         }
       };
       reader.readAsDataURL(file);
@@ -796,6 +865,47 @@ export default function App() {
                                   alt="Portrait de base"
                                   className="w-full h-full object-cover rounded-xl"
                                 />
+
+                                {isAgeifying && (
+                                  <div className="absolute inset-0 bg-[#050A18]/90 flex flex-col items-center justify-center p-4 text-center z-30 rounded-xl">
+                                    <RefreshCw className="w-8 h-8 text-[#FFFC00] animate-spin mb-3" />
+                                    <span className="text-[10px] font-mono tracking-widest text-[#FFFC00] uppercase font-bold animate-pulse">
+                                      Vieillissement IA [70 Ans]...
+                                    </span>
+                                    <p className="text-[11px] text-white/70 mt-1 max-w-[200px] font-light leading-relaxed">
+                                      Le modèle OpenAI (gpt-image-1) sculpte les traits de votre double du futur.
+                                    </p>
+                                  </div>
+                                )}
+
+                                {ageifyError && (
+                                  <div className="absolute inset-0 bg-black/95 flex flex-col items-center justify-center p-4 text-center z-40 rounded-xl border border-red-500/35">
+                                    <AlertTriangle className="w-8 h-8 text-red-500 mb-2 animate-bounce" />
+                                    <span className="text-xs font-bold text-red-400 uppercase font-mono tracking-wider">
+                                      Erreur de Vieillissement
+                                    </span>
+                                    <p className="text-[10px] text-white/70 mt-1 mb-3 leading-normal max-w-[240px] max-h-16 overflow-y-auto font-mono scrollbar-thin">
+                                      {ageifyError}
+                                    </p>
+                                    <div className="flex gap-2">
+                                      <button
+                                        type="button"
+                                        onClick={() => processAgeifyImage(originalPhoto)}
+                                        className="bg-[#FFFC00]/20 hover:bg-[#FFFC00]/30 border border-[#FFFC00]/30 text-[#FFFC00] text-[9px] uppercase font-mono px-2.5 py-1.5 rounded-lg transition active:scale-95 cursor-pointer font-bold"
+                                      >
+                                        Réessayer 🔄
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => setAgeifyError(null)}
+                                        className="bg-white/10 hover:bg-white/25 text-white/70 text-[9px] uppercase font-mono px-2.5 py-1.5 rounded-lg transition active:scale-95 cursor-pointer"
+                                      >
+                                        Ignorer
+                                      </button>
+                                    </div>
+                                  </div>
+                                )}
+
                                 <div className="absolute bottom-2 inset-x-2 flex flex-col gap-2">
                                   <button
                                     onClick={startCamera}
@@ -898,7 +1008,7 @@ export default function App() {
                         <div>
                           <input
                             type="file"
-                            accept="image/*"
+                            accept="image/jpeg, image/png, image/webp"
                             ref={fileInputRef}
                             onChange={handleUploadedFile}
                             className="hidden"
@@ -907,7 +1017,7 @@ export default function App() {
                             onClick={() => fileInputRef.current?.click()}
                             className="w-full bg-white/5 hover:bg-white/10 border border-white/10 text-xs text-white/90 px-3 py-2.5 rounded-xl text-center active:scale-95 transition cursor-pointer"
                           >
-                            Choisir un fichier (.jpg, .png)
+                            Choisir un fichier (.jpg, .png, .webp)
                           </button>
                         </div>
                       </div>

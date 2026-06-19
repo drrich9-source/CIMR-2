@@ -3,6 +3,7 @@ import path from "path";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI, Type } from "@google/genai";
 import dotenv from "dotenv";
+import OpenAI from "openai";
 import { initDb, insertLead, getAllLeads, getDbStatus } from "./db";
 
 dotenv.config();
@@ -232,6 +233,72 @@ app.get("/api/config", (req, res) => {
     snapLensId: process.env.VITE_SNAP_LENS_ID || process.env.SNAP_LENS_ID || "a375b6d69d0c4feda05a84e0ab58e471",
     snapLensGroupId: process.env.VITE_SNAP_LENS_GROUP_ID || process.env.SNAP_LENS_GROUP_ID || "4721ae08-26c8-496e-bdd1-5ab2ebf87460"
   });
+});
+
+// Lazily initialize OpenAI to prevent startup crash if key is missing
+let openaiClient: OpenAI | null = null;
+function getOpenAIClient(): OpenAI {
+  if (!openaiClient) {
+    const key = process.env.OPENAI_API_KEY;
+    if (!key) {
+      throw new Error("La variable d'environnement OPENAI_API_KEY n'est pas configurée.");
+    }
+    openaiClient = new OpenAI({
+      apiKey: key,
+    });
+  }
+  return openaiClient;
+}
+
+// Endpoint de vieillissement IA avec le modèle OpenAI gpt-image-1
+app.post("/api/ageify", async (req, res) => {
+  try {
+    const { image } = req.body;
+    if (!image) {
+      return res.status(400).json({ error: "Aucune image fournie." });
+    }
+
+    const key = process.env.OPENAI_API_KEY;
+    if (!key) {
+      return res.status(400).json({
+        error: "La clé d'API OPENAI_API_KEY n'est pas configurée. Veuillez l'ajouter dans les Secrets de votre projet ou dans le fichier .env.",
+        needsConfigure: true
+      });
+    }
+
+    const openai = getOpenAIClient();
+
+    // Extraire les données base64 et le type MIME
+    const mimeMatch = image.match(/^data:(image\/\w+);base64,/);
+    const mimeType = mimeMatch ? mimeMatch[1] : "image/jpeg";
+    const extension = mimeType.split("/")[1] || "jpg";
+
+    const base64Data = image.replace(/^data:image\/\w+;base64,/, "");
+    const buffer = Buffer.from(base64Data, "base64");
+
+    // Convertir le buffer en un objet File compatible avec l'SDK OpenAI avec type MIME explicite
+    const file = await OpenAI.toFile(buffer, `portrait.${extension}`, { type: mimeType });
+
+    console.log("Appel de l'API OpenAI Image avec le modèle gpt-image-1...");
+    const response = await openai.images.edit({
+      model: "gpt-image-1",
+      prompt: "Transform this person into the same individual at 70 years old. Preserve identity and facial features. Add realistic wrinkles, gray hair, aged skin texture, natural aging signs. Photorealistic. High quality.",
+      image: file,
+    });
+
+    const imageUrl = response.data[0]?.url;
+    if (!imageUrl) {
+      throw new Error("Aucune image n'a été renvoyée par le modèle d'OpenAI.");
+    }
+
+    console.log("Transformation d'âge réussie avec gpt-image-1.");
+    return res.json({ success: true, imageUrl });
+  } catch (err: any) {
+    console.error("Erreur de transformation d'âge par l'IA:", err);
+    return res.status(500).json({
+      error: err?.message || "La transformation d'âge avec le modèle gpt-image-1 d'OpenAI a échoué."
+    });
+  }
 });
 
 // Exporter les données PostgreSQL en fichier CSV (site leads data file)
