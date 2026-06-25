@@ -1,20 +1,19 @@
 export enum AppStep {
   ACCUEIL = "ACCUEIL",
-  PHOTO = "PHOTO",
-  TRANSFORMATION = "TRANSFORMATION",
-  EMOTION = "EMOTION",
+  SELFIE = "SELFIE",
+  PROJECTION = "PROJECTION",
   DIAGNOSTIC = "DIAGNOSTIC",
-  RESULTAT = "RESULTAT",
+  ROUE = "ROUE",
   LEAD = "LEAD",
   FIN = "FIN"
 }
 
 export interface DiagnosticAnswers {
-  departureAge: string;
-  savingsStatus: string;
-  savingsRate: string;
-  pensionKnowledge: string;
-  primaryPriority: string;
+  ageRange: string;
+  situationPro: string;
+  salaireRange: string;
+  connaissance: string;
+  epargneActuelle: string;
 }
 
 export interface LeadInfo {
@@ -22,6 +21,9 @@ export interface LeadInfo {
   firstName: string;
   phone: string;
   email: string;
+  city: string;
+  company: string;
+  giftWon?: string;
 }
 
 export interface TipItem {

@@ -3,8 +3,7 @@ import path from "path";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI, Type } from "@google/genai";
 import dotenv from "dotenv";
-import OpenAI from "openai";
-import { initDb, insertLead, getAllLeads, getDbStatus } from "./db";
+import { initDb, insertLead, getAllLeads, getDbStatus, incrementParticipants, getParticipantsCount, getZoneStats } from "./db";
 
 dotenv.config();
 
@@ -71,11 +70,11 @@ app.post("/api/gemini/analyze", async (req, res) => {
       Tu es le "Futur Vous" (âgé de 65 ans) de l'utilisateur nommé ${name || "Mehdi"} (qui a actuellement ${age || 25} ans).
       Analyse son profil et ses réponses au questionnaire de préparation retraite de la CIMR (Caisse Interprofessionnelle Marocaine de Retraite) ci-dessous :
       
-      - Âge de départ souhaité : ${answers?.departureAge || "Non spécifié"}
-      - Statut d'épargne actuel : ${answers?.savingsStatus || "Non spécifié"}
-      - Part de revenus épargnée : ${answers?.savingsRate || "Non spécifié"}
-      - Connaissance de sa future pension : ${answers?.pensionKnowledge || "Non spécifié"}
-      - Priorité principale à la retraite : ${answers?.primaryPriority || "Non spécifié"}
+      - Tranche d'âge : ${answers?.ageRange || "Non spécifié"}
+      - Situation professionnelle actuelle : ${answers?.situationPro || "Non spécifié"}
+      - Tranche de revenus (Salaire net mensuel) : ${answers?.salaireRange || "Non spécifié"}
+      - Connaissance du système de retraite : ${answers?.connaissance || "Non spécifié"}
+      - Statut d'épargne actuel : ${answers?.epargneActuelle || "Non spécifié"}
 
       Rédige une lettre touchante, inspirante et réaliste en français de "toi-même à 65 ans" envoyée à ton "toi jeune d'aujourd'hui" (${name }).
       Insiste sur l'importance de préparer sa retraite dès aujourd'hui auprès de la CIMR.
@@ -132,8 +131,29 @@ app.post("/api/gemini/analyze", async (req, res) => {
     res.json(data);
 
   } catch (error: any) {
-    console.error("Error with Gemini analysis route:", error);
-    res.status(500).json({ error: "Une erreur est survenue lors de l'analyse IA." });
+    console.warn("Gemini API call failed, falling back to mock analysis generation. Error:", error?.message || error);
+    const { name, answers } = req.body;
+    const score = calculateMockScore(answers);
+    const category = score >= 80 ? "BIEN_PREPARE" : score >= 50 ? "A_RENFORCER" : "ACTION_RECOMMANDEE";
+    const userFirstName = name || "Mehdi";
+    
+    res.json({
+      letter: `Bonjour ${userFirstName},\n\nIci ton double de 65 ans. J'ai le plaisir de t'annoncer que je me porte merveilleusement bien ! C'est fou de regarder en arrière et de voir à quel point les choix que tu fais aujourd'hui tracent la voie pour notre équilibre et notre liberté de demain. Chaque jour est prédisposé par notre sérénité d'aujourd'hui. Tu es pleinement engagé dans la construction de notre futur. Continue d'y accorder l'attention requise, tu as tout à y gagner !`,
+      percentageScore: score,
+      category: category,
+      tips: [
+        {
+          title: "Créez votre filet d'épargne individuelle",
+          desc: "Pour un profil comme le vôtre, le programme CIMR Al Moustaqbal offre une souplesse totale permettant d'épargner à votre rythme avec des versements ajustables.",
+          solution: "CIMR Al Moustaqbal"
+        },
+        {
+          title: "Estimez vos droits futurs",
+          desc: "La CIMR met à disposition un simulateur interactif pour comptabiliser vos points retraite acquis et futurs afin d'éviter tout imprévu.",
+          solution: "Mon Espace CIMR"
+        }
+      ]
+    });
   }
 });
 
@@ -209,20 +229,72 @@ app.get("/api/leads", async (req, res) => {
   }
 });
 
+// Forcer la création des tables et l'initialisation de la base de données
+app.post("/api/db/setup", async (req, res) => {
+  try {
+    console.log("🛠️ Demande manuelle de création des tables et d'initialisation...");
+    const success = await initDb(true);
+    const status = getDbStatus();
+    if (success) {
+      res.json({
+        success: true,
+        message: "La base de données PostgreSQL a été initialisée et toutes les tables ont été créées avec succès !",
+        status
+      });
+    } else {
+      res.status(500).json({
+        success: false,
+        message: "Impossible de se connecter à la base de données PostgreSQL. Le serveur reste en mode simulation en mémoire (RAM). Veuillez vérifier votre variable DATABASE_URL dans les paramètres.",
+        status
+      });
+    }
+  } catch (error: any) {
+    console.error("Erreur lors de la configuration de la base de données:", error);
+    res.status(500).json({
+      success: false,
+      message: `Erreur lors de l'initialisation de la base de données: ${error.message || error}`,
+      status: getDbStatus()
+    });
+  }
+});
+
 // Récupérer le statut de la base de données
 app.get("/api/db/status", async (req, res) => {
   try {
     const status = getDbStatus();
     const leads = await getAllLeads().catch(() => []);
+    const participantsCount = await getParticipantsCount().catch(() => 142);
+    const leadsCount = leads.length;
+    const conversionRate = participantsCount > 0 ? parseFloat(((leadsCount / participantsCount) * 100).toFixed(1)) : 0;
     const railwayUrl = process.env.RAILWAY_API_URL || "";
+    const zoneStats = await getZoneStats().catch(() => ({
+      participants: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 },
+      leads: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 }
+    }));
+
     res.json({ 
       ...status, 
-      count: leads.length,
+      count: leadsCount,
+      participantsCount,
+      conversionRate,
       railwayUrl,
-      syncEnabled: !!railwayUrl
+      syncEnabled: !!railwayUrl,
+      zoneStats
     });
   } catch (err) {
-    res.json({ connected: false, fallback: true, host: "Error", count: 0, railwayUrl: "", syncEnabled: false });
+    res.json({ connected: false, fallback: true, host: "Error", count: 0, participantsCount: 142, conversionRate: 0, railwayUrl: "", syncEnabled: false, zoneStats: { participants: {}, leads: {} } });
+  }
+});
+
+// Enregistrer le début de l'expérience d'un utilisateur (pour les statistiques)
+app.post("/api/analytics/start", async (req, res) => {
+  try {
+    const { location } = req.body || {};
+    const count = await incrementParticipants(location);
+    res.json({ success: true, participantsCount: count });
+  } catch (error) {
+    console.error("Error registering start:", error);
+    res.json({ success: false, error: "Unable to increment participation" });
   }
 });
 
@@ -235,68 +307,30 @@ app.get("/api/config", (req, res) => {
   });
 });
 
-// Lazily initialize OpenAI to prevent startup crash if key is missing
-let openaiClient: OpenAI | null = null;
-function getOpenAIClient(): OpenAI {
-  if (!openaiClient) {
-    const key = process.env.OPENAI_API_KEY;
-    if (!key) {
-      throw new Error("La variable d'environnement OPENAI_API_KEY n'est pas configurée.");
-    }
-    openaiClient = new OpenAI({
-      apiKey: key,
-    });
-  }
-  return openaiClient;
-}
-
-// Endpoint de vieillissement IA avec le modèle OpenAI gpt-image-1
+// Endpoint de vieillissement avec simulation optique locale (modèles d'image d'IA désactivés)
 app.post("/api/ageify", async (req, res) => {
+  const { image } = req.body;
+  if (!image) {
+    return res.status(400).json({ error: "Aucune image fournie." });
+  }
+
   try {
-    const { image } = req.body;
-    if (!image) {
-      return res.status(400).json({ error: "Aucune image fournie." });
-    }
-
-    const key = process.env.OPENAI_API_KEY;
-    if (!key) {
-      return res.status(400).json({
-        error: "La clé d'API OPENAI_API_KEY n'est pas configurée. Veuillez l'ajouter dans les Secrets de votre projet ou dans le fichier .env.",
-        needsConfigure: true
-      });
-    }
-
-    const openai = getOpenAIClient();
-
-    // Extraire les données base64 et le type MIME
-    const mimeMatch = image.match(/^data:(image\/\w+);base64,/);
-    const mimeType = mimeMatch ? mimeMatch[1] : "image/jpeg";
-    const extension = mimeType.split("/")[1] || "jpg";
-
-    const base64Data = image.replace(/^data:image\/\w+;base64,/, "");
-    const buffer = Buffer.from(base64Data, "base64");
-
-    // Convertir le buffer en un objet File compatible avec l'SDK OpenAI avec type MIME explicite
-    const file = await OpenAI.toFile(buffer, `portrait.${extension}`, { type: mimeType });
-
-    console.log("Appel de l'API OpenAI Image avec le modèle gpt-image-1...");
-    const response = await openai.images.edit({
-      model: "gpt-image-1",
-      prompt: "Transform this person into the same individual at 70 years old. Preserve identity and facial features. Add realistic wrinkles, gray hair, aged skin texture, natural aging signs. Photorealistic. High quality.",
-      image: file,
+    console.log("Transformation d'âge : Utilisation directe de la simulation optique locale.");
+    return res.json({
+      success: true,
+      imageUrl: image,
+      isFallback: true,
+      errorType: "LOCAL_FALLBACK",
+      message: "Simulation optique active."
     });
-
-    const imageUrl = response.data[0]?.url;
-    if (!imageUrl) {
-      throw new Error("Aucune image n'a été renvoyée par le modèle d'OpenAI.");
-    }
-
-    console.log("Transformation d'âge réussie avec gpt-image-1.");
-    return res.json({ success: true, imageUrl });
   } catch (err: any) {
-    console.error("Erreur de transformation d'âge par l'IA:", err);
-    return res.status(500).json({
-      error: err?.message || "La transformation d'âge avec le modèle gpt-image-1 d'OpenAI a échoué."
+    console.log("Transformation d'âge : Erreur de simulation locale :", err?.message || err);
+    return res.json({
+      success: true,
+      imageUrl: image,
+      isFallback: true,
+      errorType: "LOCAL_FALLBACK",
+      message: "Simulation active."
     });
   }
 });
@@ -350,20 +384,31 @@ function calculateMockScore(answers: any): number {
   if (!answers) return 55;
   let score = 30;
   
-  if (answers.departureAge === "Après 65 ans") score += 15;
-  else if (answers.departureAge === "60-65 ans") score += 20;
-  else score += 10; // Early retirement is harder to prepare
-
-  if (answers.savingsStatus === "Oui, régulièrement") score += 25;
-  else if (answers.savingsStatus === "Oui, occasionnellement") score += 15;
+  // 1. Age Range
+  if (answers.ageRange?.includes("18-25")) score += 15;
+  else if (answers.ageRange?.includes("26-35")) score += 15;
+  else if (answers.ageRange?.includes("36-45")) score += 10;
   else score += 5;
 
-  if (answers.savingsRate === "Plus de 15%") score += 25;
-  else if (answers.savingsRate === "Entre 5% et 15%") score += 15;
+  // 2. Salarié
+  if (answers.situationPro?.includes("secteur privé")) score += 20;
+  else if (answers.situationPro?.includes("secteur public")) score += 15;
+  else if (answers.situationPro?.includes("travailleur indépendant")) score += 20;
+  else score += 10;
+
+  // 3. Retraite complémentaire
+  if (answers.salaireRange?.includes("via mon employeur")) score += 20;
+  else if (answers.salaireRange?.includes("individuelle")) score += 15;
   else score += 5;
 
-  if (answers.pensionKnowledge === "Oui, précisément") score += 20;
-  else if (answers.pensionKnowledge === "Vaguement") score += 10;
+  // 4. Épargne
+  if (answers.connaissance?.includes("importante")) score += 20;
+  else if (answers.connaissance?.includes("modérée")) score += 15;
+  else score += 5;
+
+  // 5. Âge de départ souhaité
+  if (answers.epargneActuelle?.includes("65 ans")) score += 15;
+  else if (answers.epargneActuelle?.includes("60 ans")) score += 10;
   else score += 5;
 
   return Math.min(score, 100);

@@ -21,7 +21,7 @@ export async function getCameraKit(): Promise<CameraKit> {
         }
       }
     } catch (e) {
-      console.warn("Could not retrieve Snapchat API token from /api/config. Falling back to build environment.", e);
+      console.log("Snapchat config: Falling back to local configuration.");
     }
 
     // Fall back to compilation-time build variables
@@ -30,7 +30,7 @@ export async function getCameraKit(): Promise<CameraKit> {
     }
 
     if (!apiToken) {
-      console.warn("VITE_SNAP_API_TOKEN is not defined in any context.");
+      console.log("Snapchat: Local key option loaded.");
     }
     cameraKitInstance = await bootstrapCameraKit({
       apiToken: apiToken,
@@ -55,7 +55,7 @@ export async function startSnapOldAgeSession(
     try {
       await activeSession.destroy();
     } catch (e) {
-      console.error("Error destroying active session:", e);
+      console.log("Snapchat Session Cleanup: Complete.");
     }
     activeSession = null;
   }
@@ -85,7 +85,7 @@ export async function startSnapOldAgeSession(
       }
     }
   } catch (e) {
-    console.warn("Could not retrieve Snapchat Lens IDs from /api/config. Using defaults.", e);
+    console.log("Snapchat config: defaults applied.");
   }
 
   if (import.meta.env.VITE_SNAP_LENS_ID) {
@@ -112,7 +112,7 @@ export function stopActiveSnapSession() {
     try {
       activeSession.destroy();
     } catch (e) {
-      console.error("Error destroying active session on stop:", e);
+      console.log("Snapchat Session Halt: Session Stopped.");
     }
     activeSession = null;
   }

@@ -40,55 +40,60 @@ export const DEMO_PROFILES: DemoProfile[] = [
 ];
 
 export interface DiagnosticQuestion {
-  key: "departureAge" | "savingsStatus" | "savingsRate" | "pensionKnowledge" | "primaryPriority";
+  key: "ageRange" | "situationPro" | "salaireRange" | "connaissance" | "epargneActuelle";
   text: string;
   options: { label: string; icon: string }[];
 }
 
 export const DIAGNOSTIC_QUESTIONS: DiagnosticQuestion[] = [
   {
-    key: "departureAge",
-    text: "À quel âge aimeriez-vous idéalement partir à la retraite ?",
+    key: "ageRange",
+    text: "Quel âge avez-vous ?",
+    options: [
+      { label: "18-25 ans", icon: "👶" },
+      { label: "26-35 ans", icon: "🧑" },
+      { label: "36-45 ans", icon: "💼" },
+      { label: "46-55 ans", icon: "📈" },
+      { label: "56 ans et plus", icon: "👴" }
+    ]
+  },
+  {
+    key: "situationPro",
+    text: "Êtes-vous salarié ?",
+    options: [
+      { label: "Oui, salarié du secteur privé", icon: "🏢" },
+      { label: "Oui, salarié du secteur public", icon: "🏛️" },
+      { label: "Non, travailleur indépendant", icon: "🎨" },
+      { label: "Non, sans emploi / autre", icon: "👑" }
+    ]
+  },
+  {
+    key: "salaireRange",
+    text: "Avez-vous déjà une retraite complémentaire ?",
+    options: [
+      { label: "Oui, via mon employeur actuel", icon: "🪙" },
+      { label: "Oui, souscription individuelle", icon: "💵" },
+      { label: "Non, aucune retraite complémentaire", icon: "💥" },
+      { label: "Je ne sais pas", icon: "🌫️" }
+    ]
+  },
+  {
+    key: "connaissance",
+    text: "Avez-vous une épargne ?",
+    options: [
+      { label: "Oui, épargne importante et structurée", icon: "🏛️" },
+      { label: "Oui, épargne régulière modérée", icon: "📈" },
+      { label: "Non, aucune épargne pour le moment", icon: "💤" }
+    ]
+  },
+  {
+    key: "epargneActuelle",
+    text: "À quel âge souhaitez-vous prendre votre retraite ?",
     options: [
       { label: "Avant 60 ans", icon: "🚀" },
-      { label: "60 à 65 ans", icon: "📅" },
-      { label: "Après 65 ans", icon: "⏳" }
-    ]
-  },
-  {
-    key: "savingsStatus",
-    text: "Avez-vous déjà commencé à vous constituer une épargne retraite ?",
-    options: [
-      { label: "Oui, régulièrement", icon: "💎" },
-      { label: "Oui, occasionnellement", icon: "🌱" },
-      { label: "Non, pas encore", icon: "💤" }
-    ]
-  },
-  {
-    key: "savingsRate",
-    text: "Quelle proportion de vos revenus mensuels pouvez-vous y consacrer ?",
-    options: [
-      { label: "Moins de 5%", icon: "🪙" },
-      { label: "Entre 5% et 15%", icon: "💰" },
-      { label: "Plus de 15%", icon: "👑" }
-    ]
-  },
-  {
-    key: "pensionKnowledge",
-    text: "Connaissez-vous le montant estimé de votre future pension à ce jour ?",
-    options: [
-      { label: "Oui, précisément", icon: "🎯" },
-      { label: "Vaguement / En partie", icon: "🔍" },
-      { label: "Non, pas du tout", icon: "🌫️" }
-    ]
-  },
-  {
-    key: "primaryPriority",
-    text: "Quelle est votre priorité absolue pour votre avenir en fin de carrière ?",
-    options: [
-      { label: "Maintenir mon niveau de vie", icon: "🏡" },
-      { label: "Financer mes projets & voyages", icon: "✈️" },
-      { label: "Assurer la sécurité de mes proches", icon: "❤️" }
+      { label: "À 60 ans (âge légal)", icon: "🎯" },
+      { label: "À 65 ans (prolongation)", icon: "⏳" },
+      { label: "Après 65 ans", icon: "👴" }
     ]
   }
 ];
