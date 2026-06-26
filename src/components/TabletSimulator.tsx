@@ -692,10 +692,27 @@ export default function TabletSimulator({ onLeadSubmitted }: TabletSimulatorProp
                         <div>
                           <label className="text-[8px] font-mono uppercase tracking-wider text-slate-400 block mb-0.5">Votre Âge</label>
                           <input
-                            type="number"
-                            value={userage}
-                            onChange={(e) => setUserage(Math.max(18, parseInt(e.target.value) || 18))}
+                            type="text"
+                            inputMode="numeric"
+                            pattern="[0-9]*"
+                            value={userage === 0 ? "" : userage}
+                            onChange={(e) => {
+                              // Only allow numerical digits
+                              const val = e.target.value.replace(/[^0-9]/g, "");
+                              // Clamp string length to max 3 digits (e.g. up to 120)
+                              const trimmed = val.slice(0, 3);
+                              setUserage(trimmed ? parseInt(trimmed, 10) : 0);
+                            }}
+                            onBlur={() => {
+                              // Ensure a valid minimum adult age of 18 and a realistic maximum
+                              if (userage < 18) {
+                                setUserage(18);
+                              } else if (userage > 120) {
+                                setUserage(120);
+                              }
+                            }}
                             className="w-full bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none font-mono"
+                            placeholder="Ex: 35"
                           />
                         </div>
                       </div>

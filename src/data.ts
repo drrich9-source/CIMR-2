@@ -7,7 +7,7 @@ export const DEMO_PROFILES: DemoProfile[] = [
     gender: "M",
     age: 25,
     youngPhoto: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=500&auto=format&fit=crop&q=80",
-    oldPhoto: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=500&auto=format&fit=crop&q=80",
+    oldPhoto: "https://images.unsplash.com/photo-1566492031773-4f4e44671857?w=500&auto=format&fit=crop&q=80",
     quote: "Le futur dépend entièrement des décisions que vous prenez aujourd'hui."
   },
   {
@@ -16,7 +16,7 @@ export const DEMO_PROFILES: DemoProfile[] = [
     gender: "F",
     age: 28,
     youngPhoto: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=500&auto=format&fit=crop&q=80",
-    oldPhoto: "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=500&auto=format&fit=crop&q=80",
+    oldPhoto: "https://images.unsplash.com/photo-1544717305-2782549b5136?w=500&auto=format&fit=crop&q=80",
     quote: "Anticiper de bonne heure, c’est s'offrir le luxe de vivre pleinement demain."
   },
   {
@@ -25,7 +25,7 @@ export const DEMO_PROFILES: DemoProfile[] = [
     gender: "M",
     age: 34,
     youngPhoto: "https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=500&auto=format&fit=crop&q=80",
-    oldPhoto: "https://images.unsplash.com/photo-1560250097-0b93528c311a?w=500&auto=format&fit=crop&q=80",
+    oldPhoto: "https://images.unsplash.com/photo-1489980508314-941910ded1f4?w=500&auto=format&fit=crop&q=80",
     quote: "Se projeter à 65 ans me donne de l'ambition pour bâtir un capital solide."
   },
   {
