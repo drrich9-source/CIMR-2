@@ -1,11 +1,13 @@
 import React from "react";
+import { useAuth } from "../AuthContext";
 import { 
-  Users, UserCheck, TrendingUp, Landmark, Calendar, Clock, Award, CheckCircle2, ChevronRight, MapPin, Target, Sparkles, AlertCircle
+  Users, UserCheck, TrendingUp, Landmark, Calendar, Clock, Award, CheckCircle2, ChevronRight, MapPin, Target, Sparkles, AlertCircle, ShieldAlert
 } from "lucide-react";
 import { 
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, 
   PieChart, Pie, Cell 
 } from "recharts";
+import { CIMRLogo } from "./CIMRLogo";
 
 interface DashboardOverviewProps {
   leads: any[];
@@ -91,8 +93,21 @@ const CASABLANCA_ZONES: ZoneData[] = [
 ];
 
 export default function DashboardOverview({ leads, dbStatus, loading, onNavigateToTab }: DashboardOverviewProps) {
+  const { user } = useAuth();
   const [activeZoneId, setActiveZoneId] = React.useState<number | null>(null);
   const [viewMode, setViewMode] = React.useState<"standard" | "heatmap">("standard");
+
+  // Filter leads based on user's assigned region if they are a regional admin
+  const regionFilteredLeads = React.useMemo(() => {
+    if (!user || user.role === "admin_global" || user.role === "consultation") {
+      return leads;
+    }
+    const region = user.region || "Casablanca";
+    return leads.filter(lead => {
+      const city = lead.city || lead.answers?.city || "Casablanca";
+      return city.toLowerCase().includes(region.toLowerCase());
+    });
+  }, [leads, user]);
 
   // Map location string to Zone ID (1 to 5)
   const getZoneIdFromCity = (cityStr: string): number => {
@@ -115,7 +130,7 @@ export default function DashboardOverview({ leads, dbStatus, loading, onNavigate
     const extraParticipants = serverZoneParticipants[zone.id] || 0;
     
     // Sum real leads mapped to this zone
-    const extraLeads = leads.filter(lead => {
+    const extraLeads = regionFilteredLeads.filter(lead => {
       const city = lead.city || lead.answers?.city || "";
       return getZoneIdFromCity(city) === zone.id;
     }).length;
@@ -145,7 +160,7 @@ export default function DashboardOverview({ leads, dbStatus, loading, onNavigate
   const topZone = [...computedZones].sort((a, b) => b.leads - a.leads)[0];
 
   // Standard overall KPIs
-  const totalLeads = leads.length;
+  const totalLeads = regionFilteredLeads.length;
   const totalParticipants = dbStatus?.participantsCount ?? 147;
   const conversionRate = totalParticipants > 0 
     ? parseFloat(((totalLeads / totalParticipants) * 100).toFixed(1)) 
@@ -160,7 +175,7 @@ export default function DashboardOverview({ leads, dbStatus, loading, onNavigate
     "56 ans et plus": 0
   };
 
-  leads.forEach(lead => {
+  regionFilteredLeads.forEach(lead => {
     const ageRange = lead.answers?.ageRange || lead.age_range;
     if (ageRange && ageGroupCounts[ageRange] !== undefined) {
       ageGroupCounts[ageRange]++;
@@ -182,7 +197,7 @@ export default function DashboardOverview({ leads, dbStatus, loading, onNavigate
 
   // Prizes won breakdown
   const prizeCounts: { [key: string]: number } = {};
-  leads.forEach(lead => {
+  regionFilteredLeads.forEach(lead => {
     const gift = lead.gift_won || lead.giftWon || (lead.answers && lead.answers.giftWon);
     if (gift) {
       prizeCounts[gift] = (prizeCounts[gift] || 0) + 1;
@@ -202,7 +217,7 @@ export default function DashboardOverview({ leads, dbStatus, loading, onNavigate
   const COLORS = ["#1F3566", "#163A8A", "#7CB342", "#689F38", "#E5A93C", "#F43F5E"];
 
   // Activity Feed Generator based on leads
-  const recentActivities = leads.slice(0, 4).map((lead, idx) => {
+  const recentActivities = regionFilteredLeads.slice(0, 4).map((lead, idx) => {
     const city = lead.city || "Casablanca";
     const name = `${lead.first_name || lead.firstName || "Visiteur"} ${lead.last_name || lead.lastName || ""}`;
     const gift = lead.gift_won || lead.giftWon || "Pins & Goodies 🎁";
@@ -227,18 +242,30 @@ export default function DashboardOverview({ leads, dbStatus, loading, onNavigate
   return (
     <div className="space-y-6 animate-fadeIn" id="dashboard-overview">
       {/* Page Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight text-[#1F3566]">Tableau de Bord Exécutif</h2>
-          <p className="text-sm text-slate-500">
-            Analyse des performances du Roadshow CIMR National, des bornes agences et du suivi territorial.
-          </p>
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-3xl border border-slate-100 shadow-xs">
+        <div className="flex items-center gap-4">
+          <CIMRLogo showText={false} className="h-12 w-auto hidden sm:block shrink-0" />
+          <div>
+            <h2 className="text-2xl font-extrabold tracking-tight text-[#1F3566]">Tableau de Bord Exécutif</h2>
+            <p className="text-sm text-slate-500">
+              Analyse des performances du Roadshow CIMR National, des bornes agences et du suivi territorial.
+            </p>
+          </div>
         </div>
-        <div className="flex items-center gap-2 bg-white px-4 py-2 rounded-xl shadow-sm border border-slate-100 text-xs font-medium text-slate-600 self-start md:self-auto">
-          <Clock className="w-4 h-4 text-[#163A8A] animate-pulse" />
+        <div className="flex items-center gap-2 bg-slate-50 px-4 py-2 rounded-xl border border-slate-100 text-xs font-medium text-slate-600 self-start md:self-auto">
+          <Clock className="w-4 h-4 text-[#5D9B2F] animate-pulse" />
           <span>Dernière synchronisation : En direct</span>
         </div>
       </div>
+
+      {user && user.role === "admin_regional" && (
+        <div className="bg-[#1F3566]/5 border border-[#1F3566]/20 p-3.5 rounded-2xl flex items-center gap-2.5 text-xs text-[#1F3566] shadow-xs">
+          <ShieldAlert className="w-4.5 h-4.5 text-[#7CB342] shrink-0" />
+          <span>
+            <strong>Données Filtrées :</strong> Session d'accès restreint pour <strong>{user.name}</strong>. Les indicateurs et dossiers affichés sont limités à l'escale : <strong className="text-[#7CB342]">{user.region}</strong>.
+          </span>
+        </div>
+      )}
 
       {/* Campaign Objectives Progression Section */}
       <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm space-y-4">

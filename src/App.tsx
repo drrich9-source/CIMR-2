@@ -1,146 +1,76 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { 
-  Users, BarChart2, MapPin, Monitor, RefreshCw, AlertTriangle, Landmark, ShieldCheck, Database, Check, Server, Shield, Key, ChevronDown, Lock, ArrowRight
+  HashRouter as Router, 
+  Routes, 
+  Route, 
+  Navigate, 
+  Link, 
+  useLocation, 
+  useNavigate 
+} from "react-router-dom";
+import { 
+  Users, BarChart2, MapPin, Monitor, RefreshCw, AlertTriangle, 
+  Landmark, ShieldCheck, Database, Check, Server, Shield, Key, 
+  ChevronDown, Lock, ArrowRight, ShieldAlert, LogOut, Settings 
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import DashboardOverview from "./components/DashboardOverview";
 import RoadshowTracker from "./components/RoadshowTracker";
 import CRMConsole from "./components/CRMConsole";
 import TabletSimulator from "./components/TabletSimulator";
-import AccessManager, { AccessProfile } from "./components/AccessManager";
+import AccessManager from "./components/AccessManager";
+import { AuthProvider, useAuth } from "./AuthContext";
+import { AuthGuard } from "./components/AuthGuard";
+import { CIMRLogin } from "./components/CIMRLogin";
+import { CIMRLogo } from "./components/CIMRLogo";
 
-type ActiveTab = "overview" | "roadshow" | "crm" | "kiosk" | "access";
-
-const DEFAULT_PROFILES: AccessProfile[] = [
-  {
-    id: "profile-admin",
-    name: "Administrateur Global",
-    roleType: "admin",
-    allowedTabs: ["overview", "roadshow", "crm", "kiosk", "access"],
-    description: "Accès complet aux statistiques, au suivi du roadshow, à la console CRM, au simulateur et à la configuration des rôles.",
-    isDefault: true,
-    password: "admin"
-  },
-  {
-    id: "profile-animateur",
-    name: "Animateur Casa CFC",
-    roleType: "animateur",
-    allowedTabs: ["kiosk"],
-    description: "Animateur affecté au pôle Finance de Casablanca. Voit uniquement le simulateur de borne.",
-    assignedLocation: "Casa Finance City",
-    isDefault: true,
-    password: "animateur"
-  }
-];
-
+// -------------------------------------------------------------
+// MAIN ENTRY APP COMPONENT
+// -------------------------------------------------------------
 export default function App() {
-  const [profiles, setProfiles] = useState<AccessProfile[]>(() => {
-    try {
-      const saved = localStorage.getItem("cimr_profiles");
-      return saved ? JSON.parse(saved) : DEFAULT_PROFILES;
-    } catch {
-      return DEFAULT_PROFILES;
-    }
-  });
+  return (
+    <Router>
+      <AuthProvider>
+        <AppContent />
+      </AuthProvider>
+    </Router>
+  );
+}
 
-  const [activeProfile, setActiveProfile] = useState<AccessProfile>(() => {
-    try {
-      const saved = localStorage.getItem("cimr_active_profile_id");
-      if (saved) {
-        const savedProfiles = localStorage.getItem("cimr_profiles");
-        const list = savedProfiles ? JSON.parse(savedProfiles) : DEFAULT_PROFILES;
-        const found = list.find((p: any) => p.id === saved);
-        if (found) return found;
-      }
-      return DEFAULT_PROFILES[0];
-    } catch {
-      return DEFAULT_PROFILES[0];
-    }
-  });
+// -------------------------------------------------------------
+// INTERNAL WORKSPACE APP CONTENT (CONNECTED TO ROUTING & AUTH)
+// -------------------------------------------------------------
+function AppContent() {
+  const { user, logout, changePassword } = useAuth();
+  const location = useLocation();
+  const navigate = useNavigate();
 
-  const [activeTab, setActiveTab] = useState<ActiveTab>(() => {
-    try {
-      const savedActiveId = localStorage.getItem("cimr_active_profile_id");
-      if (savedActiveId === "profile-animateur" || (savedActiveId && savedActiveId.includes("animateur"))) {
-        return "kiosk";
-      }
-    } catch {}
-    return "overview";
-  });
-
-  const [showProfileDropdown, setShowProfileDropdown] = useState(false);
-
+  // Set the dynamic CIMR favicon on mount
   useEffect(() => {
-    try {
-      localStorage.setItem("cimr_profiles", JSON.stringify(profiles));
-    } catch (e) {
-      console.warn("Could not save profiles", e);
-    }
-  }, [profiles]);
+    const faviconSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="80 15 340 155" width="32" height="32">
+  <g fill="%235D9B2F">
+    <rect x="238" y="22" width="24" height="100" rx="12" transform="rotate(-81, 250, 154)" />
+    <rect x="238" y="22" width="24" height="100" rx="12" transform="rotate(-63, 250, 154)" />
+    <rect x="238" y="22" width="24" height="100" rx="12" transform="rotate(-45, 250, 154)" />
+    <rect x="238" y="22" width="24" height="100" rx="12" transform="rotate(-27, 250, 154)" />
+    <rect x="238" y="22" width="24" height="100" rx="12" transform="rotate(-9, 250, 154)" />
+    <rect x="238" y="22" width="24" height="100" rx="12" transform="rotate(9, 250, 154)" />
+    <rect x="238" y="22" width="24" height="100" rx="12" transform="rotate(27, 250, 154)" />
+    <rect x="238" y="22" width="24" height="100" rx="12" transform="rotate(45, 250, 154)" />
+    <rect x="238" y="22" width="24" height="100" rx="12" transform="rotate(63, 250, 154)" />
+    <rect x="238" y="22" width="24" height="100" rx="12" transform="rotate(81, 250, 154)" />
+  </g>
+  <path d="M 100,154 L 218,154 A 32,32 0 0,1 282,154 L 400,154 C 400,140 390,132 375,132 L 125,132 C 110,132 100,140 100,154 Z" fill="%235D9B2F" />
+  <path d="M 218,154 A 32,32 0 0,1 282,154 Z" fill="%23E7A11A" />
+</svg>`;
+    const link = (document.querySelector("link[rel~='icon']") as HTMLLinkElement) || document.createElement("link");
+    link.type = "image/svg+xml";
+    link.rel = "icon";
+    link.href = `data:image/svg+xml;utf8,${faviconSvg}`;
+    document.getElementsByTagName("head")[0].appendChild(link);
+  }, []);
 
-  useEffect(() => {
-    try {
-      localStorage.setItem("cimr_active_profile_id", activeProfile.id);
-    } catch (e) {
-      console.warn("Could not save active profile ID", e);
-    }
-    // Adjust active tab if it's no longer allowed
-    if (!activeProfile.allowedTabs.includes(activeTab)) {
-      setActiveTab(activeProfile.allowedTabs[0] || "kiosk");
-    }
-  }, [activeProfile, activeTab]);
-
-  // Password Verification State
-  const [profilePendingAuth, setProfilePendingAuth] = useState<AccessProfile | null>(null);
-  const [authPassword, setAuthPassword] = useState("");
-  const [authError, setAuthError] = useState("");
-
-  const handleSelectProfile = (profile: AccessProfile) => {
-    // If selecting the active profile, do nothing
-    if (profile.id === activeProfile.id) {
-      setShowProfileDropdown(false);
-      return;
-    }
-    
-    // Trigger password authentication modal
-    setProfilePendingAuth(profile);
-    setAuthPassword("");
-    setAuthError("");
-    setShowProfileDropdown(false);
-  };
-
-  const handleConfirmAuth = (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    if (!profilePendingAuth) return;
-    
-    const expectedPassword = profilePendingAuth.password || (profilePendingAuth.roleType === "admin" ? "admin" : "animateur");
-    
-    if (authPassword.trim() === expectedPassword) {
-      setActiveProfile(profilePendingAuth);
-      if (profilePendingAuth.allowedTabs.length > 0) {
-        if (!profilePendingAuth.allowedTabs.includes(activeTab)) {
-          setActiveTab(profilePendingAuth.allowedTabs[0]);
-        }
-      }
-      setProfilePendingAuth(null);
-      setAuthPassword("");
-      setAuthError("");
-    } else {
-      setAuthError("Mot de passe incorrect. Veuillez réessayer.");
-    }
-  };
-
-  const handleAddProfile = (newProfile: AccessProfile) => {
-    setProfiles(prev => [...prev, newProfile]);
-  };
-
-  const handleDeleteProfile = (id: string) => {
-    setProfiles(prev => prev.filter(p => p.id !== id));
-    if (activeProfile.id === id) {
-      setActiveProfile(profiles.find(p => p.id !== id) || DEFAULT_PROFILES[0]);
-    }
-  };
-
+  // Core CRM & Kiosk Live State Engine
   const [leads, setLeads] = useState<any[]>([]);
   const [dbStatus, setDbStatus] = useState<any>({
     status: "ok",
@@ -154,6 +84,50 @@ export default function App() {
   const [dbSetupResult, setDbSetupResult] = useState<{ success: boolean; message: string } | null>(null);
   const [showDbPanel, setShowDbPanel] = useState<boolean>(false);
 
+  // Profile / Options Dropdown UI states
+  const [showProfileDropdown, setShowProfileDropdown] = useState(false);
+  const [showChangePasswordModal, setShowChangePasswordModal] = useState(false);
+
+  // Password Update Modal form states
+  const [oldPassword, setOldPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [pwdError, setPwdError] = useState("");
+  const [pwdSuccess, setPwdSuccess] = useState("");
+  const [pwdSubmitting, setPwdSubmitting] = useState(false);
+
+  // Synchronize leads and database metrics from API
+  const fetchDashboardData = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const leadsRes = await fetch("/api/leads");
+      if (leadsRes.ok) {
+        const leadsData = await leadsRes.json();
+        const sortedLeads = (leadsData.leads || []).sort(
+          (a: any, b: any) => new Date(b.created_at || b.createdAt || 0).getTime() - new Date(a.created_at || a.createdAt || 0).getTime()
+        );
+        setLeads(sortedLeads);
+      }
+
+      const statusRes = await fetch("/api/db/status");
+      if (statusRes.ok) {
+        const statusData = await statusRes.json();
+        setDbStatus(statusData);
+      }
+    } catch (err: any) {
+      console.error("Failed to load dashboard metrics:", err);
+      setError("Certains services de synchronisation en direct sont indisponibles. Mode simulation local activé.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchDashboardData();
+  }, []);
+
+  // Trigger setup/creation of Postgres database schema
   const handleSetupDatabase = async () => {
     setDbSetupLoading(true);
     setDbSetupResult(null);
@@ -168,7 +142,7 @@ export default function App() {
       } else {
         setDbSetupResult({ 
           success: false, 
-          message: data.message || "La connexion ou la configuration de la base de données a échoué. Veuillez vérifier la variable DATABASE_URL." 
+          message: data.message || "La connexion ou la configuration de la base de données a échoué. Veuillez vérifier la variable DATABASE_URL dans les paramètres." 
         });
       }
     } catch (err: any) {
@@ -181,51 +155,15 @@ export default function App() {
     }
   };
 
-  // Synchronize leads and participant metrics from the server
-  const fetchDashboardData = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      // Fetch leads
-      const leadsRes = await fetch("/api/leads");
-      if (leadsRes.ok) {
-        const leadsData = await leadsRes.json();
-        // Sort leads by newest first
-        const sortedLeads = (leadsData.leads || []).sort(
-          (a: any, b: any) => new Date(b.created_at || b.createdAt || 0).getTime() - new Date(a.created_at || a.createdAt || 0).getTime()
-        );
-        setLeads(sortedLeads);
-      }
-
-      // Fetch DB metrics
-      const statusRes = await fetch("/api/db/status");
-      if (statusRes.ok) {
-        const statusData = await statusRes.json();
-        setDbStatus(statusData);
-      }
-    } catch (err: any) {
-      console.error("Failed to load dashboard metrics:", err);
-      setError("Certains services de synchronisation en direct sont indisponibles. Mode simulation activé.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchDashboardData();
-  }, []);
-
-  // Simulate traffic / participant start experience
-  const handleSimulateActivity = async (location?: string) => {
+  // Simulate analytics traffic (used in Roadshow panel)
+  const handleSimulateActivity = async (locationName?: string) => {
     try {
       const response = await fetch("/api/analytics/start", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ location })
+        body: JSON.stringify({ location: locationName })
       });
       if (response.ok) {
-        const data = await response.json();
-        // Refresh full dashboard data to synchronize everything
         fetchDashboardData();
       }
     } catch (err) {
@@ -237,214 +175,235 @@ export default function App() {
     }
   };
 
-  // Admin deletion of a lead
+  // Delete lead handler
   const handleDeleteLead = async (id: any) => {
-    // Standard mock delete on the client state to stay responsive and robust
-    setLeads(prev => prev.filter(lead => lead.id !== id));
-    setDbStatus((prev: any) => {
-      const newCount = Math.max(0, prev.count - 1);
-      return {
-        ...prev,
-        count: newCount,
-        conversionRate: prev.participantsCount > 0 ? ((newCount / prev.participantsCount) * 100).toFixed(1) : "0"
-      };
-    });
+    try {
+      const response = await fetch(`/api/leads?id=${id}`, {
+        method: "DELETE"
+      });
+      if (response.ok) {
+        setLeads(prev => prev.filter(lead => lead.id !== id));
+        fetchDashboardData();
+      } else {
+        // Fallback local deletion
+        setLeads(prev => prev.filter(lead => lead.id !== id));
+      }
+    } catch (e) {
+      // Local fallback in offline mode
+      setLeads(prev => prev.filter(lead => lead.id !== id));
+    }
   };
 
+  // Handle password modification
+  const handlePasswordChangeSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPwdError("");
+    setPwdSuccess("");
+
+    if (!user) return;
+    if (!oldPassword.trim() || !newPassword.trim() || !confirmPassword.trim()) {
+      setPwdError("Veuillez remplir tous les champs.");
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      setPwdError("Le nouveau mot de passe et sa confirmation ne correspondent pas.");
+      return;
+    }
+
+    if (newPassword.length < 4) {
+      setPwdError("Le nouveau mot de passe doit comporter au moins 4 caractères.");
+      return;
+    }
+
+    setPwdSubmitting(true);
+
+    try {
+      await changePassword(user.username, oldPassword, newPassword);
+      setPwdSuccess("Mot de passe modifié avec succès !");
+      setOldPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+      setTimeout(() => {
+        setShowChangePasswordModal(false);
+        setPwdSuccess("");
+      }, 1500);
+    } catch (err: any) {
+      setPwdError(err.message || "Impossible de modifier le mot de passe.");
+    } finally {
+      setPwdSubmitting(false);
+    }
+  };
+
+  // Calculate session validity countdown for display
+  const sessionExpiresInMins = useMemo(() => {
+    if (!user) return null;
+    const expires = new Date(user.expiresAt).getTime();
+    const now = new Date().getTime();
+    const diff = expires - now;
+    return diff > 0 ? Math.ceil(diff / 1000 / 60) : 0;
+  }, [user]);
+
   return (
-    <div className="min-h-screen bg-white font-sans antialiased text-[#1F3566] flex flex-col justify-between" id="app-container">
+    <div className="min-h-screen bg-slate-50/50 font-sans antialiased text-[#1F3566] flex flex-col justify-between" id="app-container">
       
       {/* Premium Corporate Navbar Header */}
-      <header className="bg-white border-b border-slate-100 shadow-sm sticky top-0 z-40 px-6 py-4">
+      <header className="bg-white border-b border-slate-100 shadow-xs sticky top-0 z-40 px-6 py-4">
         <div className="max-w-7xl mx-auto flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           
           {/* Brand Identity Section */}
-          <div className="flex items-center gap-3">
-            <div className="bg-[#1F3566] text-white px-4 py-2.5 rounded-xl flex flex-col items-center shadow-md">
-              <span className="text-lg font-black tracking-widest leading-none">CIMR</span>
-              <span className="text-[7px] font-mono tracking-wider font-semibold uppercase mt-0.5 text-[#7CB342]">ROADSHOW HUB</span>
+          <Link to="/" className="flex items-center gap-3 self-start cursor-pointer hover:opacity-90 pl-1">
+            <CIMRLogo 
+              showText={true} 
+              className="h-9 sm:h-11 md:h-12 lg:h-[54px] py-1.5 transition-all" 
+            />
+            <div className="border-l border-slate-200 pl-3 py-1 hidden sm:block">
+              <h1 className="text-sm font-extrabold tracking-tight text-[#1F3566] uppercase leading-none">Future Me</h1>
+              <p className="text-[8px] font-bold text-[#5D9B2F] uppercase tracking-wider font-mono mt-1">Marketing & CRM</p>
             </div>
-            <div>
-              <h1 className="text-lg font-extrabold tracking-tight text-[#1F3566] uppercase">CIMR Future Me</h1>
-              <p className="text-[10px] font-semibold text-[#7CB342] uppercase tracking-wider font-mono">PLATEFORME MARKETING DIRECT & CRM</p>
-            </div>
-          </div>
+          </Link>
 
           {/* Interactive Navigation Tabs & Profile Switcher */}
-          {activeProfile.roleType === "admin" ? (
-            <div className="flex flex-col md:flex-row items-center gap-4">
-              <nav className="flex items-center overflow-x-auto gap-1 bg-slate-100/75 p-1 rounded-xl self-start md:self-auto scrollbar-none">
-                {activeProfile.allowedTabs.includes("overview") && (
-                  <button
-                    onClick={() => setActiveTab("overview")}
-                    className={`px-4 py-2 rounded-lg text-xs font-bold tracking-wide uppercase transition duration-150 flex items-center gap-1.5 cursor-pointer ${
-                      activeTab === "overview" 
-                        ? "bg-white text-[#1F3566] shadow-sm" 
-                        : "text-slate-600 hover:text-[#1F3566]"
+          <div className="flex flex-col md:flex-row items-center gap-4 w-full lg:w-auto">
+            <nav className="flex items-center overflow-x-auto gap-1 bg-slate-150/40 p-1 rounded-xl w-full md:w-auto scrollbar-none">
+              
+              {/* Public link - Future Mirror */}
+              <Link
+                to="/"
+                className={`px-4 py-2 rounded-lg text-xs font-bold tracking-wide uppercase transition duration-150 flex items-center gap-1.5 cursor-pointer shrink-0 ${
+                  location.pathname === "/" 
+                    ? "bg-[#1F3566] text-white shadow-xs" 
+                    : "text-slate-600 hover:text-[#1F3566] hover:bg-slate-50"
+                }`}
+              >
+                <Monitor className="w-4 h-4 text-[#7CB342]" />
+                <span>Future Mirror</span>
+              </Link>
+
+              {/* Protected Links - require login, hidden for "animateur" role */}
+              {(!user || user.role !== "animateur") && (
+                <>
+                  <Link
+                    to="/dashboard"
+                    className={`px-4 py-2 rounded-lg text-xs font-bold tracking-wide uppercase transition duration-150 flex items-center gap-1.5 cursor-pointer shrink-0 ${
+                      location.pathname === "/dashboard" 
+                        ? "bg-[#1F3566] text-white shadow-xs" 
+                        : "text-slate-600 hover:text-[#1F3566] hover:bg-slate-50"
                     }`}
                   >
-                    <BarChart2 className="w-4 h-4 text-[#1F3566]" />
-                    Vue d'ensemble
-                  </button>
-                )}
-                {activeProfile.allowedTabs.includes("roadshow") && (
-                  <button
-                    onClick={() => setActiveTab("roadshow")}
-                    className={`px-4 py-2 rounded-lg text-xs font-bold tracking-wide uppercase transition duration-150 flex items-center gap-1.5 cursor-pointer ${
-                      activeTab === "roadshow" 
-                        ? "bg-white text-[#1F3566] shadow-sm" 
-                        : "text-slate-600 hover:text-[#1F3566]"
+                    <BarChart2 className="w-4 h-4 text-[#7CB342]" />
+                    <span>Vue d'ensemble</span>
+                  </Link>
+
+                  <Link
+                    to="/roadshow"
+                    className={`px-4 py-2 rounded-lg text-xs font-bold tracking-wide uppercase transition duration-150 flex items-center gap-1.5 cursor-pointer shrink-0 ${
+                      location.pathname === "/roadshow" 
+                        ? "bg-[#1F3566] text-white shadow-xs" 
+                        : "text-slate-600 hover:text-[#1F3566] hover:bg-slate-50"
                     }`}
                   >
                     <MapPin className="w-4 h-4 text-[#7CB342]" />
-                    Suivi Roadshow
-                  </button>
-                )}
-                {activeProfile.allowedTabs.includes("crm") && (
-                  <button
-                    onClick={() => setActiveTab("crm")}
-                    className={`px-4 py-2 rounded-lg text-xs font-bold tracking-wide uppercase transition duration-150 flex items-center gap-1.5 cursor-pointer ${
-                      activeTab === "crm" 
-                        ? "bg-white text-[#1F3566] shadow-sm" 
-                        : "text-slate-600 hover:text-[#1F3566]"
+                    <span>Suivi Roadshow</span>
+                  </Link>
+
+                  <Link
+                    to="/crm"
+                    className={`px-4 py-2 rounded-lg text-xs font-bold tracking-wide uppercase transition duration-150 flex items-center gap-1.5 cursor-pointer shrink-0 ${
+                      location.pathname === "/crm" 
+                        ? "bg-[#1F3566] text-white shadow-xs" 
+                        : "text-slate-600 hover:text-[#1F3566] hover:bg-slate-50"
                     }`}
                   >
                     <Users className="w-4 h-4 text-[#7CB342]" />
-                    Console CRM
-                  </button>
-                )}
-                {activeProfile.allowedTabs.includes("kiosk") && (
-                  <button
-                    onClick={() => setActiveTab("kiosk")}
-                    className={`px-4 py-2 rounded-lg text-xs font-bold tracking-wide uppercase transition duration-150 flex items-center gap-1.5 cursor-pointer ${
-                      activeTab === "kiosk" 
-                        ? "bg-white text-[#1F3566] shadow-sm" 
-                        : "text-slate-600 hover:text-[#1F3566]"
-                    }`}
-                  >
-                    <Monitor className="w-4 h-4 text-amber-500 animate-pulse" />
-                    Simulateur Borne
-                  </button>
-                )}
-                {activeProfile.allowedTabs.includes("access") && (
-                  <button
-                    onClick={() => setActiveTab("access")}
-                    className={`px-4 py-2 rounded-lg text-xs font-bold tracking-wide uppercase transition duration-150 flex items-center gap-1.5 cursor-pointer ${
-                      activeTab === "access" 
-                        ? "bg-white text-[#1F3566] shadow-sm" 
-                        : "text-slate-600 hover:text-[#1F3566]"
-                    }`}
-                  >
-                    <Shield className="w-4 h-4 text-[#1F3566]" />
-                    Rôles & Accès
-                  </button>
-                )}
-              </nav>
+                    <span>Console CRM</span>
+                  </Link>
 
-              {/* Profile Selector Dropdown */}
-              <div className="relative shrink-0">
+                  {user && user.role === "admin_global" && (
+                    <Link
+                      to="/roles"
+                      className={`px-4 py-2 rounded-lg text-xs font-bold tracking-wide uppercase transition duration-150 flex items-center gap-1.5 cursor-pointer shrink-0 ${
+                        location.pathname === "/roles" 
+                          ? "bg-[#1F3566] text-white shadow-xs" 
+                          : "text-slate-600 hover:text-[#1F3566] hover:bg-slate-50"
+                      }`}
+                    >
+                      <Shield className="w-4 h-4 text-[#7CB342]" />
+                      <span>Rôles & Accès</span>
+                    </Link>
+                  )}
+                </>
+              )}
+            </nav>
+
+            {/* Profile Selector & Session Info Dropdown */}
+            {user ? (
+              <div className="relative shrink-0 w-full md:w-auto">
                 <button
                   onClick={() => setShowProfileDropdown(!showProfileDropdown)}
-                  className="bg-slate-50 hover:bg-slate-100 border border-slate-200 text-xs font-bold text-[#1F3566] px-4 py-2.5 rounded-xl shadow-xs flex items-center gap-2 transition cursor-pointer"
+                  className="w-full md:w-auto bg-white hover:bg-slate-50 border border-slate-200 text-xs font-bold text-[#1F3566] px-4 py-2.5 rounded-xl shadow-xs flex items-center justify-between md:justify-start gap-2 transition cursor-pointer"
                 >
-                  <Shield className="w-3.5 h-3.5 text-[#163A8A]" />
-                  <span>{activeProfile.name}</span>
+                  <div className="flex items-center gap-2">
+                    <ShieldCheck className="w-4 h-4 text-[#7CB342]" />
+                    <span className="truncate">{user.name}</span>
+                  </div>
                   <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
                 </button>
                 {showProfileDropdown && (
                   <>
                     <div className="fixed inset-0 z-40" onClick={() => setShowProfileDropdown(false)} />
-                    <div className="absolute right-0 mt-2 w-72 bg-white border border-slate-150 rounded-2xl shadow-xl z-50 p-2 animate-in fade-in zoom-in-95 duration-100">
-                      <div className="px-3 py-2 border-b border-slate-100 mb-1">
-                        <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Changer de Profil d'accès</span>
+                    <div className="absolute right-0 mt-2 w-72 bg-white border border-slate-150 rounded-2xl shadow-xl z-50 p-3 animate-in fade-in zoom-in-95 duration-100 space-y-2">
+                      <div className="border-b border-slate-100 pb-2 mb-1">
+                        <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Session Active Sécurisée</span>
+                        <div className="text-xs font-bold text-[#1F3566] mt-1">{user.username}</div>
+                        <div className="text-[10px] text-slate-500 font-mono mt-0.5">Role : {user.role.toUpperCase()}</div>
+                        {user.region && (
+                          <div className="text-[10px] text-[#7CB342] font-semibold mt-0.5">Région : {user.region}</div>
+                        )}
+                        <div className="text-[10px] text-amber-600 font-medium mt-1.5 flex items-center gap-1 bg-amber-50 px-2 py-1 rounded-lg">
+                          <Lock className="w-3 h-3 shrink-0" />
+                          <span>Expire dans {sessionExpiresInMins ?? 30} min</span>
+                        </div>
                       </div>
-                      <div className="space-y-1 max-h-80 overflow-y-auto">
-                        {profiles.map((p) => {
-                          const isSel = p.id === activeProfile.id;
-                          return (
-                            <button
-                              key={p.id}
-                              onClick={() => handleSelectProfile(p)}
-                              className={`w-full text-left p-2.5 rounded-xl transition flex items-start gap-2.5 cursor-pointer ${
-                                isSel ? "bg-[#1F3566]/5 text-[#1F3566] font-semibold" : "hover:bg-slate-50 text-slate-700"
-                              }`}
-                            >
-                              <div className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${p.roleType === 'admin' ? 'bg-[#163A8A]' : 'bg-amber-500'}`} />
-                              <div className="text-xs">
-                                <div className="flex items-center gap-1.5">
-                                  <span>{p.name}</span>
-                                  {isSel && <Check className="w-3 h-3 text-[#7CB342]" />}
-                                </div>
-                                <p className="text-[10px] text-slate-400 leading-tight mt-0.5">{p.description}</p>
-                              </div>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  </>
-                )}
-              </div>
-            </div>
-          ) : (
-            /* Animateur Mode: minimalist connection status with quick logout option */
-            <div className="flex flex-col sm:flex-row items-center gap-3">
-              <div className="bg-amber-50 border border-amber-100 px-4 py-2 rounded-xl flex items-center gap-2.5 text-xs text-amber-800">
-                <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse shrink-0" />
-                <span className="font-medium">
-                  Saisie Borne active : <strong>{activeProfile.name}</strong>
-                </span>
-                {activeProfile.assignedLocation && (
-                  <span className="text-[10px] text-amber-800 bg-amber-100/80 px-2 py-0.5 rounded-md font-mono font-bold shrink-0">📍 {activeProfile.assignedLocation}</span>
-                )}
-              </div>
-
-              {/* Quick Switch Profile dropdown */}
-              <div className="relative shrink-0">
-                <button
-                  onClick={() => setShowProfileDropdown(!showProfileDropdown)}
-                  className="bg-white hover:bg-slate-50 border border-slate-200 text-xs font-bold text-slate-600 px-4 py-2 rounded-xl shadow-xs flex items-center gap-1.5 transition cursor-pointer"
-                >
-                  <Lock className="w-3.5 h-3.5 text-amber-600" />
-                  <span>Quitter la session</span>
-                  <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
-                </button>
-                {showProfileDropdown && (
-                  <>
-                    <div className="fixed inset-0 z-40" onClick={() => setShowProfileDropdown(false)} />
-                    <div className="absolute right-0 mt-2 w-72 bg-white border border-slate-150 rounded-2xl shadow-xl z-50 p-2 animate-in fade-in zoom-in-95 duration-100">
-                      <div className="px-3 py-2 border-b border-slate-100 mb-1">
-                        <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Changer de Profil d'accès</span>
-                      </div>
-                      <div className="space-y-1 max-h-80 overflow-y-auto">
-                        {profiles.map((p) => {
-                          const isSel = p.id === activeProfile.id;
-                          return (
-                            <button
-                              key={p.id}
-                              onClick={() => handleSelectProfile(p)}
-                              className={`w-full text-left p-2.5 rounded-xl transition flex items-start gap-2.5 cursor-pointer ${
-                                isSel ? "bg-[#1F3566]/5 text-[#1F3566] font-semibold" : "hover:bg-slate-50 text-slate-700"
-                              }`}
-                            >
-                              <div className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${p.roleType === 'admin' ? 'bg-[#163A8A]' : 'bg-amber-500'}`} />
-                              <div className="text-xs">
-                                <div className="flex items-center gap-1.5">
-                                  <span>{p.name}</span>
-                                  {isSel && <Check className="w-3 h-3 text-[#7CB342]" />}
-                                </div>
-                                <p className="text-[10px] text-slate-400 leading-tight mt-0.5">{p.description}</p>
-                              </div>
-                            </button>
-                          );
-                        })}
+                      
+                      <div className="space-y-1">
+                        <button
+                          onClick={() => {
+                            setShowProfileDropdown(false);
+                            setShowChangePasswordModal(true);
+                          }}
+                          className="w-full text-left p-2 hover:bg-slate-50 text-slate-700 rounded-lg text-xs font-semibold flex items-center gap-2 cursor-pointer"
+                        >
+                          <Key className="w-4 h-4 text-slate-400" />
+                          <span>Changer de mot de passe</span>
+                        </button>
+                        
+                        <button
+                          onClick={() => {
+                            setShowProfileDropdown(false);
+                            logout();
+                            navigate("/");
+                          }}
+                          className="w-full text-left p-2 hover:bg-rose-50 text-rose-700 rounded-lg text-xs font-semibold flex items-center gap-2 cursor-pointer"
+                        >
+                          <LogOut className="w-4 h-4 text-rose-500" />
+                          <span>Se déconnecter</span>
+                        </button>
                       </div>
                     </div>
                   </>
                 )}
               </div>
-            </div>
-          )}
+            ) : (
+              <Link
+                to="/dashboard"
+                className="w-full md:w-auto bg-[#1F3566] hover:bg-[#163A8A] text-white text-xs font-bold px-5 py-2.5 rounded-xl shadow-xs flex items-center justify-center gap-1.5 transition cursor-pointer"
+              >
+                <Lock className="w-3.5 h-3.5 text-white" />
+                <span>Accès Direction CRM</span>
+              </Link>
+            )}
+          </div>
         </div>
       </header>
 
@@ -465,8 +424,8 @@ export default function App() {
           </div>
         )}
 
-        {/* PostgreSQL Database Manager Widget - Restricted to Admin users */}
-        {activeProfile.roleType === "admin" && (
+        {/* PostgreSQL Database Manager Widget - Restricted to Global Admin users */}
+        {user && user.role === "admin_global" && (location.pathname === "/dashboard" || location.pathname === "/crm") && (
           <div className="mb-6 bg-slate-50 border border-slate-200/80 rounded-2xl p-4 shadow-xs" id="db-manager-panel">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
               <div className="flex items-start gap-3">
@@ -546,7 +505,7 @@ export default function App() {
                       </div>
                       <div className="flex items-center justify-between p-2 bg-slate-50/50 rounded-lg border border-slate-100">
                         <span className="font-mono text-[11px] text-slate-700 font-bold">🔢 cimr_stats</span>
-                        <span className="text-[10px] text-slate-500">Compteurs cumulés d'engagements par zone</span>
+                        <span className="text-[10px] text-slate-500">Compteurs d'engagements par zone</span>
                       </div>
                       <div className="flex items-center justify-between p-2 bg-slate-50/50 rounded-lg border border-slate-100">
                         <span className="font-mono text-[11px] text-slate-700 font-bold">📝 cimr_leads</span>
@@ -576,62 +535,89 @@ export default function App() {
           </div>
         )}
 
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={activeTab}
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-            transition={{ duration: 0.15 }}
-            className="w-full"
-          >
-            {activeTab === "overview" && (
+        {/* Dynamic Client Router Pages */}
+        <Routes>
+          {/* Public Route - Kiosk Simulator */}
+          <Route path="/" element={
+            <div className="space-y-4">
+              {user && (
+                <div className="max-w-2xl mx-auto mb-4 bg-amber-50 border border-amber-100 px-4 py-3 rounded-2xl flex items-center justify-between text-xs text-amber-800 shadow-xs">
+                  <div className="flex items-center gap-2.5">
+                    <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse shrink-0" />
+                    <span>
+                      Saisie Borne Connectée : <strong>{user.name}</strong> 
+                      {user.region && <span className="font-bold text-[#7CB342] ml-1">📍 {user.region}</span>}
+                    </span>
+                  </div>
+                  <button 
+                    onClick={() => { logout(); navigate("/"); }} 
+                    className="text-[10px] font-bold text-rose-700 hover:underline uppercase tracking-wide bg-rose-50 px-2 py-1 rounded"
+                  >
+                    Fermer Session
+                  </button>
+                </div>
+              )}
+              <TabletSimulator onLeadSubmitted={fetchDashboardData} />
+            </div>
+          } />
+
+          {/* Secure CRM Routes under AuthGuard wrapper */}
+          <Route path="/dashboard" element={
+            <AuthGuard>
               <DashboardOverview 
                 leads={leads} 
                 dbStatus={dbStatus} 
                 loading={loading}
-                onNavigateToTab={(tab) => setActiveTab(tab)}
+                onNavigateToTab={(tab) => {
+                  if (tab === "kiosk") navigate("/");
+                  else navigate("/" + tab);
+                }}
               />
-            )}
+            </AuthGuard>
+          } />
 
-            {activeTab === "roadshow" && (
+          <Route path="/roadshow" element={
+            <AuthGuard>
               <RoadshowTracker 
                 dbStatus={dbStatus} 
                 leads={leads}
                 onSimulateActivity={handleSimulateActivity}
               />
-            )}
+            </AuthGuard>
+          } />
 
-            {activeTab === "crm" && (
+          <Route path="/crm" element={
+            <AuthGuard>
               <CRMConsole 
                 leads={leads} 
                 onDeleteLead={handleDeleteLead}
                 loading={loading}
               />
-            )}
+            </AuthGuard>
+          } />
 
-            {activeTab === "kiosk" && (
-              <TabletSimulator 
-                onLeadSubmitted={fetchDashboardData}
-              />
-            )}
+          <Route path="/roles" element={
+            <AuthGuard>
+              <AccessManager />
+            </AuthGuard>
+          } />
 
-            {activeTab === "access" && (
-              <AccessManager 
-                profiles={profiles}
-                activeProfile={activeProfile}
-                onSelectProfile={handleSelectProfile}
-                onAddProfile={handleAddProfile}
-                onDeleteProfile={handleDeleteProfile}
-              />
-            )}
-          </motion.div>
-        </AnimatePresence>
+          {/* Login Page Route */}
+          <Route path="/login" element={
+            user ? (
+              user.role === "animateur" ? <Navigate to="/" replace /> : <Navigate to="/dashboard" replace />
+            ) : (
+              <CIMRLogin onSuccess={(role) => navigate(role === "animateur" ? "/" : "/dashboard")} />
+            )
+          } />
 
+          {/* Wildcard Fallback */}
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
       </main>
 
       {/* Corporate Dashboard Footer bar */}
-      <footer className="bg-white border-t border-slate-100 py-4 px-6 text-center text-[10px] text-slate-400 font-medium">
+      <footer className="bg-white border-t border-slate-100 py-4 px-6 text-center text-[10px] text-slate-400 font-medium mt-12">
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2">
           <span>© 2026 Caisse Interprofessionnelle Marocaine de Retraite (CIMR). Tous droits réservés.</span>
           <div className="flex items-center gap-1 text-[#7CB342]">
@@ -641,9 +627,9 @@ export default function App() {
         </div>
       </footer>
 
-      {/* Password verification modal */}
+      {/* Change Password secure modal */}
       <AnimatePresence>
-        {profilePendingAuth && (
+        {showChangePasswordModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
             {/* Backdrop */}
             <motion.div
@@ -651,9 +637,9 @@ export default function App() {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => {
-                setProfilePendingAuth(null);
-                setAuthPassword("");
-                setAuthError("");
+                setShowChangePasswordModal(false);
+                setPwdError("");
+                setPwdSuccess("");
               }}
               className="absolute inset-0 bg-slate-900/60 backdrop-blur-xs"
             />
@@ -664,54 +650,76 @@ export default function App() {
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
               transition={{ type: "spring", duration: 0.3 }}
-              className="bg-white rounded-2xl shadow-xl border border-slate-100 max-w-md w-full relative z-10 overflow-hidden"
+              className="bg-white rounded-3xl shadow-2xl border border-slate-100 max-w-md w-full relative z-10 overflow-hidden"
             >
               <div className="p-6">
                 <div className="w-12 h-12 bg-blue-50 text-[#1F3566] rounded-2xl flex items-center justify-center mb-4">
-                  <Lock className="w-6 h-6 text-[#163A8A]" />
+                  <Key className="w-6 h-6 text-[#163A8A]" />
                 </div>
                 
-                <h3 className="text-lg font-bold text-[#1F3566]">Validation requise</h3>
-                <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-                  Vous tentez de vous connecter au profil d'accès <strong>{profilePendingAuth.name}</strong>. Saisissez le mot de passe requis pour cette session.
+                <h3 className="text-lg font-bold text-[#1F3566]">Modifier votre mot de passe</h3>
+                <p className="text-xs text-slate-500 mt-1">
+                  Mettez à jour le mot de passe d'accès sécurisé pour votre session <strong>{user?.username}</strong>.
                 </p>
 
-                <form onSubmit={(e) => handleConfirmAuth(e)} className="mt-4 space-y-4">
+                <form onSubmit={handlePasswordChangeSubmit} className="mt-5 space-y-4">
                   <div>
-                    <label className="text-[10px] font-bold text-[#1F3566] uppercase tracking-wider block mb-1">Mot de passe d'accès</label>
+                    <label className="text-[10px] font-bold text-[#1F3566] uppercase tracking-wider block mb-1">Ancien mot de passe</label>
                     <input
                       type="password"
-                      autoFocus
                       required
-                      value={authPassword}
-                      onChange={(e) => {
-                        setAuthPassword(e.target.value);
-                        setAuthError("");
-                      }}
-                      placeholder="Saisissez le mot de passe"
+                      value={oldPassword}
+                      onChange={(e) => setOldPassword(e.target.value)}
+                      placeholder="Saisissez votre mot de passe actuel"
                       className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs text-[#1F3566] focus:outline-none focus:ring-2 focus:ring-[#163A8A]"
                     />
                   </div>
 
-                  {authError && (
+                  <div>
+                    <label className="text-[10px] font-bold text-[#1F3566] uppercase tracking-wider block mb-1">Nouveau mot de passe</label>
+                    <input
+                      type="password"
+                      required
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      placeholder="Saisissez le nouveau mot de passe"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs text-[#1F3566] focus:outline-none focus:ring-2 focus:ring-[#163A8A]"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] font-bold text-[#1F3566] uppercase tracking-wider block mb-1">Confirmer le nouveau mot de passe</label>
+                    <input
+                      type="password"
+                      required
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      placeholder="Confirmez le nouveau mot de passe"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs text-[#1F3566] focus:outline-none focus:ring-2 focus:ring-[#163A8A]"
+                    />
+                  </div>
+
+                  {pwdError && (
                     <div className="p-3 bg-rose-50 border border-rose-100 text-rose-800 text-xs rounded-xl flex items-center gap-1.5 animate-pulse">
-                      <AlertTriangle className="w-4 h-4 shrink-0" />
-                      <span>{authError}</span>
+                      <AlertTriangle className="w-4 h-4 shrink-0 text-rose-600" />
+                      <span>{pwdError}</span>
                     </div>
                   )}
 
-                  <div className="bg-slate-50 border border-slate-100 p-3 rounded-xl text-[10px] text-slate-400 font-medium">
-                    <span className="text-[#1F3566] font-semibold block mb-0.5">💡 Aide de test :</span>
-                    Le mot de passe de ce rôle est <strong className="text-slate-600 font-mono">"{profilePendingAuth.password || (profilePendingAuth.roleType === "admin" ? "admin" : "animateur")}"</strong>.
-                  </div>
+                  {pwdSuccess && (
+                    <div className="p-3 bg-emerald-50 border border-emerald-100 text-emerald-800 text-xs rounded-xl flex items-center gap-1.5">
+                      <Check className="w-4 h-4 shrink-0 text-emerald-600" />
+                      <span>{pwdSuccess}</span>
+                    </div>
+                  )}
 
                   <div className="flex items-center justify-end gap-2 pt-2">
                     <button
                       type="button"
                       onClick={() => {
-                        setProfilePendingAuth(null);
-                        setAuthPassword("");
-                        setAuthError("");
+                        setShowChangePasswordModal(false);
+                        setPwdError("");
+                        setPwdSuccess("");
                       }}
                       className="bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700 text-xs font-semibold px-4 py-2 rounded-xl transition cursor-pointer"
                     >
@@ -719,9 +727,10 @@ export default function App() {
                     </button>
                     <button
                       type="submit"
+                      disabled={pwdSubmitting}
                       className="bg-[#1F3566] hover:bg-[#163A8A] text-white text-xs font-semibold px-4 py-2.5 rounded-xl shadow-xs flex items-center gap-1.5 transition active:scale-95 cursor-pointer"
                     >
-                      <span>Se connecter</span>
+                      <span>Mettre à jour</span>
                       <ArrowRight className="w-3.5 h-3.5" />
                     </button>
                   </div>
@@ -731,7 +740,6 @@ export default function App() {
           </div>
         )}
       </AnimatePresence>
-
     </div>
   );
 }

@@ -7,6 +7,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { AppStep, DiagnosticAnswers, LeadInfo, AnalysisResult } from "../types";
 import { DEMO_PROFILES, DIAGNOSTIC_QUESTIONS } from "../data";
 import { startSnapOldAgeSession, stopActiveSnapSession } from "../utils/snapCamera";
+import { CIMRLogo } from "./CIMRLogo";
 
 interface TabletSimulatorProps {
   onLeadSubmitted: () => void;
@@ -533,9 +534,13 @@ export default function TabletSimulator({ onLeadSubmitted }: TabletSimulatorProp
               >
                 {/* Brand Header */}
                 <div className="text-center flex flex-col items-center mt-2">
-                  <div className="inline-flex flex-col items-center p-3 rounded-2xl bg-white/5 border border-white/10 shadow-md">
-                    <span className="text-xl font-extrabold tracking-widest text-[#7CB342] font-display">CIMR</span>
-                    <span className="text-[9px] font-mono tracking-widest text-white/60 uppercase mt-0.5">FUTURE ME • EXPERIENCE IMMERSIVE</span>
+                  <div className="inline-flex flex-col items-center p-4 rounded-3xl bg-white/5 border border-white/10 shadow-lg backdrop-blur-xs">
+                    <CIMRLogo 
+                      showText={true} 
+                      darkTheme={true} 
+                      className="h-16 mb-1.5" 
+                    />
+                    <span className="text-[9px] font-mono tracking-widest text-white/50 uppercase">FUTURE ME • EXPÉRIENCE IMMERSIVE</span>
                   </div>
                 </div>
 

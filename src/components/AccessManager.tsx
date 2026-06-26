@@ -1,73 +1,57 @@
 import React, { useState } from "react";
+import { useAuth, UserAccount, UserRole } from "../AuthContext";
 import { 
-  Shield, Users, Plus, CheckCircle2, Check, Lock, Eye, ArrowRight, UserPlus, Trash2, Key, Info, MapPin
+  Shield, Users, Plus, CheckCircle2, Check, Lock, Eye, ArrowRight, UserPlus, Trash2, Key, Info, MapPin, ShieldAlert, EyeOff, Sparkles, Edit
 } from "lucide-react";
 
-export interface AccessProfile {
-  id: string;
-  name: string;
-  roleType: "admin" | "animateur";
-  allowedTabs: ("overview" | "roadshow" | "crm" | "kiosk" | "access")[];
-  description: string;
-  assignedLocation?: string;
-  isDefault?: boolean;
-  password?: string;
-}
-
-interface AccessManagerProps {
-  profiles: AccessProfile[];
-  activeProfile: AccessProfile;
-  onSelectProfile: (profile: AccessProfile) => void;
-  onAddProfile: (profile: AccessProfile) => void;
-  onDeleteProfile: (id: string) => void;
-}
-
-const AVAILABLE_TABS = [
-  { id: "overview", name: "Vue d'ensemble", icon: "📊", desc: "Statistiques, graphiques et conversion" },
-  { id: "roadshow", name: "Suivi Roadshow", icon: "📍", desc: "Cartographie et suivi des pôles" },
-  { id: "crm", name: "Console CRM", icon: "👤", desc: "Liste et export des leads qualifiés" },
-  { id: "kiosk", name: "Simulateur Borne", icon: "🖥️", desc: "Interface interactive de diagnostic" },
-  { id: "access", name: "Gestion des Accès", icon: "🛡️", desc: "Configuration des profils et autorisations de l'application" }
-] as const;
-
-export default function AccessManager({ 
-  profiles, 
-  activeProfile, 
-  onSelectProfile, 
-  onAddProfile, 
-  onDeleteProfile 
-}: AccessManagerProps) {
+export default function AccessManager() {
+  const { accounts, updateAccountsList, user } = useAuth();
   
   const [showAddForm, setShowAddForm] = useState(false);
   const [name, setName] = useState("");
-  const [roleType, setRoleType] = useState<"admin" | "animateur">("animateur");
-  const [allowedTabs, setAllowedTabs] = useState<("overview" | "roadshow" | "crm" | "kiosk" | "access")[]>(["kiosk"]);
-  const [description, setDescription] = useState("");
-  const [assignedLocation, setAssignedLocation] = useState("Casa Finance City");
-  const [formPassword, setFormPassword] = useState("animateur");
+  const [username, setUsername] = useState("");
+  const [role, setRole] = useState<UserRole>("animateur");
+  const [region, setRegion] = useState("Casablanca");
+  const [password, setPassword] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
+  const [showPasswords, setShowPasswords] = useState<{ [key: string]: boolean }>({});
 
-  const handleTabToggle = (tabId: "overview" | "roadshow" | "crm" | "kiosk" | "access") => {
-    if (allowedTabs.includes(tabId)) {
-      if (allowedTabs.length === 1) return;
-      setAllowedTabs(allowedTabs.filter(t => t !== tabId));
-    } else {
-      setAllowedTabs([...allowedTabs, tabId]);
-    }
+  // Editing states
+  const [editingAccount, setEditingAccount] = useState<UserAccount | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editRole, setEditRole] = useState<UserRole>("animateur");
+  const [editRegion, setEditRegion] = useState("Casablanca");
+  const [editPassword, setEditPassword] = useState("");
+  const [editErrorMessage, setEditErrorMessage] = useState("");
+
+  // Guard access: Only "admin_global" is allowed to view or edit accounts configuration
+  if (!user || user.role !== "admin_global") {
+    return (
+      <div className="max-w-xl mx-auto my-12 p-8 bg-white rounded-3xl border border-slate-100 shadow-xl text-center flex flex-col items-center space-y-4">
+        <div className="w-16 h-16 bg-rose-50 text-rose-600 rounded-2xl flex items-center justify-center">
+          <ShieldAlert className="w-8 h-8" />
+        </div>
+        <h3 className="text-xl font-bold text-[#1F3566]">Accès Strictement Restreint</h3>
+        <p className="text-xs text-slate-500 leading-relaxed max-w-sm">
+          La configuration des rôles, l'attribution des droits et la visualisation des identifiants sont réservées exclusivement aux administrateurs généraux du système CIMR.
+        </p>
+      </div>
+    );
+  }
+
+  const toggleShowPassword = (userKey: string) => {
+    setShowPasswords(prev => ({
+      ...prev,
+      [userKey]: !prev[userKey]
+    }));
   };
 
-  const handleRoleTypeChange = (type: "admin" | "animateur") => {
-    setRoleType(type);
-    if (type === "animateur") {
-      setAllowedTabs(["kiosk"]);
-      if (formPassword === "admin") {
-        setFormPassword("animateur");
-      }
+  const handleRoleChange = (selectedRole: UserRole) => {
+    setRole(selectedRole);
+    if (selectedRole === "admin_global" || selectedRole === "consultation") {
+      setRegion("");
     } else {
-      setAllowedTabs(["overview", "roadshow", "crm", "kiosk", "access"]);
-      if (formPassword === "animateur") {
-        setFormPassword("admin");
-      }
+      setRegion("Casablanca");
     }
   };
 
@@ -76,41 +60,154 @@ export default function AccessManager({
     setErrorMessage("");
 
     if (!name.trim()) {
-      setErrorMessage("Veuillez saisir un nom pour ce profil d'accès.");
+      setErrorMessage("Veuillez saisir le nom complet.");
       return;
     }
 
-    if (!formPassword.trim()) {
-      setErrorMessage("Veuillez saisir un mot de passe pour ce profil d'accès.");
+    if (!username.trim()) {
+      setErrorMessage("Veuillez saisir un nom d'utilisateur unique.");
       return;
     }
 
-    if (allowedTabs.length === 0) {
-      setErrorMessage("Veuillez autoriser au moins un écran pour ce profil.");
+    if (username.trim().includes(" ")) {
+      setErrorMessage("Le nom d'utilisateur ne doit pas contenir d'espaces.");
       return;
     }
 
-    const newProfile: AccessProfile = {
-      id: "profile-" + Date.now(),
+    if (!password.trim()) {
+      setErrorMessage("Veuillez définir un mot de passe d'accès.");
+      return;
+    }
+
+    // Check duplicate username
+    const isDuplicate = accounts.some(
+      (acc) => acc.username.toLowerCase() === username.trim().toLowerCase()
+    );
+
+    if (isDuplicate) {
+      setErrorMessage("Ce nom d'utilisateur est déjà utilisé par un autre profil.");
+      return;
+    }
+
+    const newAccount: UserAccount = {
+      username: username.trim().toLowerCase(),
+      password: password.trim(),
+      role,
       name: name.trim(),
-      roleType,
-      allowedTabs,
-      description: description.trim() || (roleType === "admin" ? "Profil Administrateur personnalisé" : "Profil Animateur de borne"),
-      assignedLocation: roleType === "animateur" ? assignedLocation : undefined,
-      isDefault: false,
-      password: formPassword.trim()
+      region: (role === "admin_regional" || role === "animateur") ? region : undefined,
     };
 
-    onAddProfile(newProfile);
-    
+    updateAccountsList([...accounts, newAccount]);
+
     // Reset form
     setName("");
-    setRoleType("animateur");
-    setAllowedTabs(["kiosk"]);
-    setDescription("");
-    setAssignedLocation("Casa Finance City");
-    setFormPassword("animateur");
+    setUsername("");
+    setRole("animateur");
+    setRegion("Casablanca");
+    setPassword("");
     setShowAddForm(false);
+  };
+
+  const handleEditRoleChange = (selectedRole: UserRole) => {
+    setEditRole(selectedRole);
+    if (selectedRole === "admin_global" || selectedRole === "consultation") {
+      setEditRegion("");
+    } else {
+      setEditRegion("Casablanca");
+    }
+  };
+
+  const handleEditSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setEditErrorMessage("");
+
+    if (!editName.trim()) {
+      setEditErrorMessage("Veuillez saisir le nom complet.");
+      return;
+    }
+
+    if (!editPassword.trim()) {
+      setEditErrorMessage("Veuillez définir un mot de passe d'accès.");
+      return;
+    }
+
+    if (!editingAccount) return;
+
+    // Check if we are demoting the main admin
+    if (editingAccount.username.toLowerCase() === "admin" && editRole !== "admin_global") {
+      setEditErrorMessage("Le rôle de l'administrateur principal 'admin' doit rester 'Admin Global'.");
+      return;
+    }
+
+    const updated = accounts.map((acc) => {
+      if (acc.username.toLowerCase() === editingAccount.username.toLowerCase()) {
+        return {
+          ...acc,
+          name: editName.trim(),
+          role: editRole,
+          region: (editRole === "admin_regional" || editRole === "animateur") ? editRegion : undefined,
+          password: editPassword.trim(),
+        };
+      }
+      return acc;
+    });
+
+    updateAccountsList(updated);
+    
+    // Show feedback if editing oneself
+    if (editingAccount.username.toLowerCase() === user.username.toLowerCase()) {
+      alert("Modifications enregistrées ! Note : S'agissant de votre propre compte actif, reconnectez-vous pour que les changements soient visibles sur l'interface.");
+    }
+    
+    setEditingAccount(null);
+  };
+
+  const handleDeleteAccount = (userToDelete: string) => {
+    if (userToDelete.toLowerCase() === "admin") {
+      alert("Erreur: Impossible de supprimer le compte d'administrateur global principal.");
+      return;
+    }
+    
+    if (userToDelete.toLowerCase() === user.username.toLowerCase()) {
+      alert("Erreur: Vous ne pouvez pas supprimer le compte avec lequel vous êtes connecté.");
+      return;
+    }
+
+    if (window.confirm(`Êtes-vous sûr de vouloir supprimer le compte d'accès '${userToDelete}' ?`)) {
+      const filtered = accounts.filter(acc => acc.username.toLowerCase() !== userToDelete.toLowerCase());
+      updateAccountsList(filtered);
+    }
+  };
+
+  const getRoleBadge = (accountRole: UserRole) => {
+    switch (accountRole) {
+      case "admin_global":
+        return (
+          <span className="px-2.5 py-0.5 bg-blue-50 text-blue-700 rounded-full font-bold text-[10px] tracking-wide border border-blue-100 uppercase">
+            Admin Global
+          </span>
+        );
+      case "admin_regional":
+        return (
+          <span className="px-2.5 py-0.5 bg-[#7CB342]/10 text-[#7CB342] rounded-full font-bold text-[10px] tracking-wide border border-[#7CB342]/20 uppercase">
+            Admin Régional
+          </span>
+        );
+      case "animateur":
+        return (
+          <span className="px-2.5 py-0.5 bg-amber-50 text-amber-700 rounded-full font-bold text-[10px] tracking-wide border border-amber-100 uppercase">
+            Animateur Borne
+          </span>
+        );
+      case "consultation":
+        return (
+          <span className="px-2.5 py-0.5 bg-slate-100 text-slate-600 rounded-full font-bold text-[10px] tracking-wide border border-slate-200 uppercase">
+            Lecture Seule
+          </span>
+        );
+      default:
+        return null;
+    }
   };
 
   return (
@@ -119,130 +216,112 @@ export default function AccessManager({
       <div>
         <h2 className="text-2xl font-bold tracking-tight text-[#1F3566]">Gestion des Rôles & Accès</h2>
         <p className="text-sm text-slate-500 mt-1">
-          Définissez les profils d'accès de l'application. Les animateurs sur site accèdent uniquement au simulateur de borne, tandis que les administrateurs supervisent les données globales.
+          Attribuez des accès sécurisés individuels pour le personnel sur le terrain et à la direction générale.
         </p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
-        {/* Left column: List of profiles */}
+        {/* Left: Accounts List */}
         <div className="lg:col-span-2 space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-bold text-[#1F3566] uppercase tracking-wider font-mono flex items-center gap-2">
               <Users className="w-4 h-4 text-[#7CB342]" />
-              Profils Utilisateurs Existants ({profiles.length})
+              Profils Comptes Sécurisés ({accounts.length})
             </h3>
             <button
               onClick={() => setShowAddForm(true)}
               className="bg-[#1F3566] hover:bg-[#163A8A] text-white text-xs font-semibold px-3.5 py-2 rounded-xl shadow-xs flex items-center gap-1.5 active:scale-95 transition cursor-pointer"
             >
               <UserPlus className="w-3.5 h-3.5" />
-              Nouveau Profil
+              Nouveau Compte
             </button>
           </div>
 
           <div className="grid grid-cols-1 gap-4">
-            {profiles.map((profile) => {
-              const isActive = activeProfile.id === profile.id;
-              
+            {accounts.map((acc) => {
+              const isCurrentUser = acc.username.toLowerCase() === user.username.toLowerCase();
               return (
                 <div 
-                  key={profile.id} 
-                  className={`bg-white rounded-2xl p-5 border transition-all ${
-                    isActive 
-                      ? "border-[#1F3566] ring-2 ring-[#1F3566]/5 shadow-md" 
-                      : "border-slate-100 hover:border-slate-200 shadow-xs"
+                  key={acc.username}
+                  className={`bg-white rounded-2xl border p-5 transition-all shadow-xs duration-200 ${
+                    isCurrentUser ? "border-[#1F3566]/40 bg-[#1F3566]/5" : "border-slate-100"
                   }`}
                 >
                   <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
-                    <div className="space-y-1.5">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <h4 className="font-bold text-base text-[#1F3566]">{profile.name}</h4>
-                        
-                        <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${
-                          profile.roleType === "admin" 
-                            ? "bg-blue-100 text-[#163A8A] border border-blue-200" 
-                            : "bg-amber-100 text-amber-800 border border-amber-200"
-                        }`}>
-                          {profile.roleType === "admin" ? "Administrateur" : "Animateur Borne"}
-                        </span>
-
-                        {profile.isDefault && (
-                          <span className="text-[9px] font-bold bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full uppercase tracking-wider">
-                            Par défaut
-                          </span>
-                        )}
+                    <div className="flex items-start gap-3">
+                      <div className="w-10 h-10 bg-slate-50 rounded-xl flex items-center justify-center shrink-0 border border-slate-100">
+                        <Users className="w-5 h-5 text-slate-500" />
                       </div>
-                      
-                      <p className="text-xs text-slate-500 max-w-xl">{profile.description}</p>
-                      
-                      <div className="flex flex-wrap gap-2 pt-1">
-                        {profile.assignedLocation && (
-                          <div className="flex items-center gap-1.5 text-[11px] font-medium text-slate-600 bg-slate-50 px-2.5 py-1 rounded-lg">
-                            <MapPin className="w-3.5 h-3.5 text-slate-400" />
-                            <span>Pôle : {profile.assignedLocation}</span>
-                          </div>
-                        )}
-                        <div className="flex items-center gap-1.5 text-[11px] font-mono font-medium text-[#1F3566] bg-[#1F3566]/5 border border-[#1F3566]/10 px-2.5 py-1 rounded-lg">
-                          <Key className="w-3.5 h-3.5 text-[#1F3566]" />
-                          <span>Mot de passe : <strong className="text-[#1F3566] font-bold">{profile.password || (profile.roleType === "admin" ? "admin" : "animateur")}</strong></span>
+                      <div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h4 className="font-bold text-sm text-[#1F3566]">{acc.name}</h4>
+                          {isCurrentUser && (
+                            <span className="bg-blue-600 text-white text-[8px] px-1.5 py-0.5 rounded font-mono uppercase font-bold tracking-wider">
+                              Moi
+                            </span>
+                          )}
+                          {getRoleBadge(acc.role)}
                         </div>
+                        <p className="text-xs text-slate-400 font-medium font-mono mt-0.5">
+                          Username: <strong className="text-slate-600">{acc.username}</strong>
+                        </p>
+                        
+                        {(acc.region) && (
+                          <div className="flex items-center gap-1 text-[10px] text-[#7CB342] font-semibold mt-2">
+                            <MapPin className="w-3.5 h-3.5" />
+                            <span>Escale Affectée : {acc.region}</span>
+                          </div>
+                        )}
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-2 self-end sm:self-start shrink-0">
-                      {!isActive ? (
-                        <button
-                          onClick={() => onSelectProfile(profile)}
-                          className="bg-[#7CB342] hover:bg-[#689F38] text-white text-xs font-semibold px-3 py-1.5 rounded-lg flex items-center gap-1 active:scale-95 transition cursor-pointer"
-                        >
-                          <ArrowRight className="w-3.5 h-3.5" />
-                          Tester ce rôle
-                        </button>
-                      ) : (
-                        <span className="bg-emerald-50 text-emerald-700 border border-emerald-100 text-xs font-bold px-3 py-1.5 rounded-lg flex items-center gap-1">
-                          <CheckCircle2 className="w-3.5 h-3.5 text-[#7CB342]" />
-                          Actif
+                    <div className="flex flex-col sm:items-end justify-between gap-2 shrink-0">
+                      {/* Password Viewer */}
+                      <div className="flex items-center gap-2 bg-slate-50 border border-slate-100 rounded-xl px-3 py-1.5 self-start sm:self-auto">
+                        <Key className="w-3.5 h-3.5 text-slate-400" />
+                        <span className="font-mono text-xs text-slate-600">
+                          {showPasswords[acc.username] ? acc.password : "••••••••"}
                         </span>
-                      )}
-
-                      {!profile.isDefault && (
                         <button
-                          onClick={() => onDeleteProfile(profile.id)}
-                          className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-slate-50 transition cursor-pointer"
-                          title="Supprimer ce profil"
+                          type="button"
+                          onClick={() => toggleShowPassword(acc.username)}
+                          className="p-1 hover:bg-slate-200 rounded-md text-slate-400 hover:text-slate-600 transition cursor-pointer"
                         >
-                          <Trash2 className="w-4 h-4" />
+                          {showPasswords[acc.username] ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                         </button>
-                      )}
-                    </div>
-                  </div>
+                      </div>
 
-                  {/* Permissions indicators */}
-                  <div className="mt-4 pt-4 border-t border-slate-100">
-                    <span className="text-[9px] uppercase font-mono text-slate-400 block mb-2 font-bold tracking-wider">Écrans & Accès autorisés</span>
-                    <div className="flex flex-wrap gap-2">
-                      {AVAILABLE_TABS.map((tab) => {
-                        const hasAccess = profile.allowedTabs.includes(tab.id);
-                        return (
-                          <div 
-                            key={tab.id}
-                            className={`text-[11px] px-2.5 py-1 rounded-lg flex items-center gap-1.5 font-medium border ${
-                              hasAccess 
-                                ? "bg-slate-50 text-slate-700 border-slate-200" 
-                                : "bg-slate-50/30 text-slate-300 border-slate-100 line-through"
-                            }`}
+                      {/* Account Actions (Edit / Delete) */}
+                      <div className="flex items-center gap-3 mt-1 self-start sm:self-auto">
+                        <button
+                          onClick={() => {
+                            setEditingAccount(acc);
+                            setEditName(acc.name);
+                            setEditRole(acc.role);
+                            setEditRegion(acc.region || "Casablanca");
+                            setEditPassword(acc.password || "");
+                            setShowAddForm(false);
+                            // Scroll to form if needed
+                            const elem = document.getElementById("access-form-container");
+                            if (elem) elem.scrollIntoView({ behavior: "smooth" });
+                          }}
+                          className="text-[#1F3566] hover:text-[#163A8A] text-[11px] font-bold flex items-center gap-1 hover:underline transition cursor-pointer"
+                        >
+                          <Edit className="w-3.5 h-3.5 text-[#1F3566]" />
+                          <span>Modifier</span>
+                        </button>
+
+                        {!isCurrentUser && acc.username !== "admin" && (
+                          <button
+                            onClick={() => handleDeleteAccount(acc.username)}
+                            className="text-rose-600 hover:text-rose-800 text-[11px] font-bold flex items-center gap-1 hover:underline transition cursor-pointer"
                           >
-                            <span className={hasAccess ? "" : "grayscale"}>{tab.icon}</span>
-                            <span>{tab.name}</span>
-                            {hasAccess ? (
-                              <Check className="w-3 h-3 text-[#7CB342]" />
-                            ) : (
-                              <Lock className="w-3 h-3 text-slate-300" />
-                            )}
-                          </div>
-                        );
-                      })}
+                            <Trash2 className="w-3.5 h-3.5" />
+                            <span>Supprimer</span>
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -251,177 +330,235 @@ export default function AccessManager({
           </div>
         </div>
 
-        {/* Right column: Form or info info */}
-        <div>
-          {showAddForm ? (
-            <div className="bg-white rounded-2xl p-6 border border-slate-100 shadow-md space-y-5 animate-in fade-in slide-in-from-right duration-150">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Key className="w-5 h-5 text-[#1F3566]" />
-                  <h3 className="font-bold text-[#1F3566]">Nouveau Profil</h3>
-                </div>
+        {/* Right: Add/Edit Account Form (Drawer or panel) */}
+        <div id="access-form-container">
+          {editingAccount ? (
+            <div className="bg-white rounded-3xl border border-slate-100 shadow-lg p-6 space-y-5 animate-in fade-in zoom-in-95 duration-200">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                <h4 className="font-bold text-[#1F3566] text-sm flex items-center gap-1.5">
+                  <Edit className="w-4 h-4 text-[#7CB342]" />
+                  Modifier le Compte
+                </h4>
                 <button
-                  type="button"
-                  onClick={() => setShowAddForm(false)}
-                  className="text-xs text-slate-400 hover:text-slate-600 cursor-pointer"
+                  onClick={() => setEditingAccount(null)}
+                  className="text-xs text-slate-400 hover:text-slate-600 transition cursor-pointer"
                 >
-                  Annuler
+                  Fermer
                 </button>
               </div>
 
-              {errorMessage && (
-                <div className="p-3 bg-rose-50 border border-rose-100 text-rose-800 text-xs rounded-xl flex items-center gap-1.5">
-                  <Info className="w-4 h-4 shrink-0" />
-                  <span>{errorMessage}</span>
-                </div>
-              )}
-
-              <form onSubmit={handleSubmit} className="space-y-4">
+              <form onSubmit={handleEditSubmit} className="space-y-4">
                 <div>
-                  <label className="text-[10px] font-bold text-[#1F3566] uppercase tracking-wider block mb-1">Nom du Profil / Rôle</label>
-                  <input
-                    type="text"
-                    required
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    placeholder="Ex: Animateur Casanearshore, Superviseur"
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-[#1F3566] focus:outline-none focus:ring-2 focus:ring-[#163A8A]"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-[10px] font-bold text-[#1F3566] uppercase tracking-wider block mb-1">Description</label>
-                  <textarea
-                    value={description}
-                    onChange={(e) => setDescription(e.target.value)}
-                    placeholder="Courte description de ce rôle..."
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-[#1F3566] focus:outline-none focus:ring-2 focus:ring-[#163A8A] h-16 resize-none"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-[10px] font-bold text-[#1F3566] uppercase tracking-wider block mb-1 flex items-center gap-1">
-                    <Key className="w-3 h-3 text-[#1F3566]" />
-                    Mot de passe requis
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={formPassword}
-                    onChange={(e) => setFormPassword(e.target.value)}
-                    placeholder="Mot de passe pour ce rôle"
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-[#1F3566] focus:outline-none focus:ring-2 focus:ring-[#163A8A]"
-                  />
-                  <span className="text-[9px] text-slate-400 mt-1 block">Ce mot de passe sera demandé pour se connecter ou changer vers ce rôle.</span>
-                </div>
-
-                <div>
-                  <label className="text-[10px] font-bold text-[#1F3566] uppercase tracking-wider block mb-1">Niveau d'Autorité</label>
-                  <div className="grid grid-cols-2 gap-2 mt-1">
-                    <button
-                      type="button"
-                      onClick={() => handleRoleTypeChange("animateur")}
-                      className={`py-2 rounded-xl text-xs font-bold border transition ${
-                        roleType === "animateur" 
-                          ? "bg-amber-50 text-amber-800 border-amber-300" 
-                          : "bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100"
-                      }`}
-                    >
-                      Animateur Borne
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleRoleTypeChange("admin")}
-                      className={`py-2 rounded-xl text-xs font-bold border transition ${
-                        roleType === "admin" 
-                          ? "bg-blue-50 text-[#163A8A] border-blue-300" 
-                          : "bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100"
-                      }`}
-                    >
-                      Administrateur
-                    </button>
+                  <span className="text-[10px] font-bold text-[#1F3566] uppercase tracking-wider block mb-1">Nom d'utilisateur</span>
+                  <div className="w-full bg-slate-100 border border-slate-200 rounded-xl px-3 py-2 text-xs font-mono font-bold text-slate-600">
+                    {editingAccount.username}
                   </div>
                 </div>
 
-                {roleType === "animateur" && (
+                <div>
+                  <label className="text-[10px] font-bold text-[#1F3566] uppercase tracking-wider block mb-1">Nom Complet</label>
+                  <input
+                    type="text"
+                    required
+                    value={editName}
+                    onChange={(e) => setEditName(e.target.value)}
+                    placeholder="Ex: Omar Alami"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-[#1F3566] focus:outline-none focus:ring-2 focus:ring-[#1F3566]"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-bold text-[#1F3566] uppercase tracking-wider block mb-1">Rôle d'Accès</label>
+                  <select
+                    value={editRole}
+                    disabled={editingAccount.username.toLowerCase() === "admin"}
+                    onChange={(e) => handleEditRoleChange(e.target.value as UserRole)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-[#1F3566] focus:outline-none cursor-pointer disabled:bg-slate-100 disabled:text-slate-400"
+                  >
+                    <option value="admin_global">Administrateur Global (Tout)</option>
+                    <option value="admin_regional">Administrateur Régional (Région unique)</option>
+                    <option value="animateur">Animateur Borne (Borne unique)</option>
+                    <option value="consultation">Lecteur (Lecture seule)</option>
+                  </select>
+                  {editingAccount.username.toLowerCase() === "admin" && (
+                    <span className="text-[9px] text-slate-400 mt-1 block">Le rôle du compte 'admin' principal ne peut pas être modifié.</span>
+                  )}
+                </div>
+
+                {(editRole === "admin_regional" || editRole === "animateur") && (
                   <div>
-                    <label className="text-[10px] font-bold text-[#1F3566] uppercase tracking-wider block mb-1">Zone / Pôle Affecté</label>
+                    <label className="text-[10px] font-bold text-[#1F3566] uppercase tracking-wider block mb-1">Escale / Région Affectée</label>
                     <select
-                      value={assignedLocation}
-                      onChange={(e) => setAssignedLocation(e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-[#1F3566] focus:outline-none focus:ring-2 focus:ring-[#163A8A] cursor-pointer"
+                      value={editRegion}
+                      onChange={(e) => setEditRegion(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-[#1F3566] focus:outline-none cursor-pointer"
                     >
-                      <option value="Casa Finance City">Casa Finance City</option>
-                      <option value="Casanearshore">Casanearshore</option>
-                      <option value="Zerktouni">Zerktouni</option>
-                      <option value="Anfa">Anfa</option>
-                      <option value="Gauthier">Gauthier</option>
-                      <option value="Ain Sebaa">Ain Sebaa</option>
-                      <option value="Berrechid">Berrechid</option>
-                      <option value="Bouskoura Zone Industrielle">Bouskoura Z.I.</option>
+                      <option value="Casablanca">Casablanca</option>
+                      <option value="Rabat">Rabat</option>
+                      <option value="Marrakech">Marrakech</option>
+                      <option value="Tanger">Tanger</option>
+                      <option value="Agadir">Agadir</option>
                     </select>
                   </div>
                 )}
 
                 <div>
-                  <label className="text-[10px] font-bold text-[#1F3566] uppercase tracking-wider block mb-1">Écrans Autorisés</label>
-                  <p className="text-[10px] text-slate-400 mb-2">Sélectionnez les parties de l'application accessibles par ce profil.</p>
-                  
-                  <div className="space-y-2">
-                    {AVAILABLE_TABS.map((tab) => {
-                      const isChecked = allowedTabs.includes(tab.id);
-                      return (
-                        <label 
-                          key={tab.id}
-                          className={`flex items-start gap-2.5 p-2 rounded-lg border cursor-pointer select-none transition ${
-                            isChecked 
-                              ? "bg-slate-50 border-slate-200" 
-                              : "bg-white border-slate-100 hover:border-slate-200 opacity-60"
-                          }`}
-                        >
-                          <input
-                            type="checkbox"
-                            checked={isChecked}
-                            onChange={() => handleTabToggle(tab.id)}
-                            className="mt-0.5 accent-[#1F3566]"
-                          />
-                          <div>
-                            <div className="text-xs font-bold text-slate-700 flex items-center gap-1">
-                              <span>{tab.icon}</span>
-                              <span>{tab.name}</span>
-                            </div>
-                            <span className="text-[10px] text-slate-400 block">{tab.desc}</span>
-                          </div>
-                        </label>
-                      );
-                    })}
-                  </div>
+                  <label className="text-[10px] font-bold text-[#1F3566] uppercase tracking-wider block mb-1">Mot de Passe d'accès</label>
+                  <input
+                    type="password"
+                    required
+                    value={editPassword}
+                    onChange={(e) => setEditPassword(e.target.value)}
+                    placeholder="Saisissez un mot de passe solide"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-[#1F3566] focus:outline-none focus:ring-2 focus:ring-[#1F3566]"
+                  />
                 </div>
 
+                {editErrorMessage && (
+                  <div className="p-3 bg-rose-50 border border-rose-100 text-rose-800 text-[11px] rounded-xl flex items-center gap-1">
+                    <ShieldAlert className="w-4 h-4 shrink-0 text-rose-600" />
+                    <span>{editErrorMessage}</span>
+                  </div>
+                )}
+
+                <div className="flex gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setEditingAccount(null)}
+                    className="w-1/2 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700 text-xs font-semibold px-4 py-2 rounded-xl transition cursor-pointer"
+                  >
+                    Annuler
+                  </button>
+                  <button
+                    type="submit"
+                    className="w-1/2 bg-[#1F3566] hover:bg-[#163A8A] text-white text-xs font-bold px-4 py-2.5 rounded-xl transition cursor-pointer flex items-center justify-center gap-1.5"
+                  >
+                    <span>Enregistrer</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </form>
+            </div>
+          ) : showAddForm ? (
+            <div className="bg-white rounded-3xl border border-slate-100 shadow-lg p-6 space-y-5 animate-in fade-in zoom-in-95 duration-200">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                <h4 className="font-bold text-[#1F3566] text-sm flex items-center gap-1.5">
+                  <UserPlus className="w-4 h-4 text-[#7CB342]" />
+                  Ajouter un Compte Accès
+                </h4>
                 <button
-                  type="submit"
-                  className="w-full bg-[#1F3566] hover:bg-[#163A8A] text-white text-xs font-bold py-2.5 rounded-xl shadow-md transition active:scale-95 cursor-pointer"
+                  onClick={() => setShowAddForm(false)}
+                  className="text-xs text-slate-400 hover:text-slate-600 transition cursor-pointer"
                 >
-                  Enregistrer ce Profil
+                  Fermer
                 </button>
+              </div>
+
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <div>
+                  <label className="text-[10px] font-bold text-[#1F3566] uppercase tracking-wider block mb-1">Nom Complet</label>
+                  <input
+                    type="text"
+                    required
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="Ex: Omar Alami"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-[#1F3566] focus:outline-none focus:ring-2 focus:ring-[#1F3566]"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-bold text-[#1F3566] uppercase tracking-wider block mb-1">Nom d'utilisateur (Username)</label>
+                  <input
+                    type="text"
+                    required
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                    placeholder="Ex: omar_alami (sans espace)"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-[#1F3566] focus:outline-none focus:ring-2 focus:ring-[#1F3566]"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-bold text-[#1F3566] uppercase tracking-wider block mb-1">Rôle d'Accès</label>
+                  <select
+                    value={role}
+                    onChange={(e) => handleRoleChange(e.target.value as UserRole)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-[#1F3566] focus:outline-none cursor-pointer"
+                  >
+                    <option value="admin_global">Administrateur Global (Tout)</option>
+                    <option value="admin_regional">Administrateur Régional (Région unique)</option>
+                    <option value="animateur">Animateur Borne (Borne unique)</option>
+                    <option value="consultation">Lecteur (Lecture seule)</option>
+                  </select>
+                </div>
+
+                {(role === "admin_regional" || role === "animateur") && (
+                  <div>
+                    <label className="text-[10px] font-bold text-[#1F3566] uppercase tracking-wider block mb-1">Escale / Région Affectée</label>
+                    <select
+                      value={region}
+                      onChange={(e) => setRegion(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-[#1F3566] focus:outline-none cursor-pointer"
+                    >
+                      <option value="Casablanca">Casablanca</option>
+                      <option value="Rabat">Rabat</option>
+                      <option value="Marrakech">Marrakech</option>
+                      <option value="Tanger">Tanger</option>
+                      <option value="Agadir">Agadir</option>
+                    </select>
+                  </div>
+                )}
+
+                <div>
+                  <label className="text-[10px] font-bold text-[#1F3566] uppercase tracking-wider block mb-1">Mot de Passe d'accès</label>
+                  <input
+                    type="password"
+                    required
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="Saisissez un mot de passe solide"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-[#1F3566] focus:outline-none focus:ring-2 focus:ring-[#1F3566]"
+                  />
+                </div>
+
+                {errorMessage && (
+                  <div className="p-3 bg-rose-50 border border-rose-100 text-rose-800 text-[11px] rounded-xl flex items-center gap-1">
+                    <ShieldAlert className="w-4 h-4 shrink-0 text-rose-600" />
+                    <span>{errorMessage}</span>
+                  </div>
+                )}
+
+                <div className="flex gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowAddForm(false)}
+                    className="w-1/2 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700 text-xs font-semibold px-4 py-2 rounded-xl transition cursor-pointer"
+                  >
+                    Annuler
+                  </button>
+                  <button
+                    type="submit"
+                    className="w-1/2 bg-[#1F3566] hover:bg-[#163A8A] text-white text-xs font-bold px-4 py-2.5 rounded-xl transition cursor-pointer flex items-center justify-center gap-1.5"
+                  >
+                    <span>Enregistrer</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
               </form>
             </div>
           ) : (
-            <div className="bg-slate-50 rounded-2xl p-6 border border-slate-200/60 text-slate-600 space-y-4">
-              <div className="w-10 h-10 bg-blue-100/50 text-[#1F3566] rounded-xl flex items-center justify-center">
-                <Shield className="w-5 h-5 text-[#1F3566]" />
-              </div>
-              <h3 className="font-bold text-sm text-[#1F3566] uppercase tracking-wider font-mono">Politique d'Accès CIMR</h3>
-              <div className="text-xs space-y-2.5 leading-relaxed text-slate-500">
-                <p>
-                  Afin de garantir la conformité <strong>RGPD</strong> et les directives de la <strong>CNDP</strong>, les animateurs sur le terrain ont un périmètre d'accès strictement limité.
-                </p>
-                <p className="bg-white p-3 rounded-xl border border-slate-100 font-medium text-[#1F3566]">
-                  💡 <strong>Principe de moindre privilège :</strong> Un animateur sur site ne peut en aucun cas visualiser la base de données globale ou exporter des listes de clients.
-                </p>
-                <p>
-                  Sélectionnez un rôle "Animateur" pour simuler l'application telle qu'elle s'affiche sur la tablette physique de la borne interactive.
-                </p>
+            <div className="bg-[#1F3566]/5 border border-[#1F3566]/10 p-5 rounded-3xl space-y-3.5">
+              <span className="w-10 h-10 bg-[#1F3566] rounded-xl flex items-center justify-center text-white font-bold text-sm">
+                🛡️
+              </span>
+              <h4 className="font-extrabold text-[#1F3566] text-sm">Politique de Sécurité CIMR</h4>
+              <p className="text-[11px] text-slate-500 leading-relaxed">
+                Le modèle d'habilitation applique un cloisonnement strict par rôle. Les accès "Animateur" sont verrouillés sur le simulateur de borne physique de leur agence locale, tandis que les "Admin Régionaux" accèdent uniquement aux indicateurs de leur ville d'affectation.
+              </p>
+              <div className="flex items-center gap-2 text-[10px] text-slate-400 font-medium">
+                <Info className="w-4 h-4 shrink-0 text-slate-400" />
+                <span>Tous les mots de passe sont encodés et stockés dans la session d'infrastructure.</span>
               </div>
             </div>
           )}
