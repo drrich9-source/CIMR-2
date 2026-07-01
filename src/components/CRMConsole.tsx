@@ -167,10 +167,20 @@ export default function CRMConsole({ leads, onDeleteLead, loading }: CRMConsoleP
           <select
             value={cityFilter}
             onChange={(e) => setCityFilter(e.target.value)}
-            className="w-full md:w-48 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-[#1F3566] focus:outline-none cursor-pointer"
+            className="w-full md:w-56 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-[#1F3566] focus:outline-none cursor-pointer"
           >
             <option value="ALL">Toutes les escales</option>
-            <option value="Casablanca">Casablanca</option>
+            <option value="Casablanca">Casablanca (Tout)</option>
+            <option value="Casa Finance City">└─ Casa Finance City</option>
+            <option value="Casanearshore">└─ Casanearshore</option>
+            <option value="Zerktouni">└─ Zerktouni</option>
+            <option value="Anfa">└─ Anfa</option>
+            <option value="Racine">└─ Racine</option>
+            <option value="Gauthier">└─ Gauthier</option>
+            <option value="Ain Sebaa">└─ Ain Sebaa</option>
+            <option value="Zenata">└─ Zenata</option>
+            <option value="Berrechid">└─ Berrechid</option>
+            <option value="Bouskoura Zone Industrielle">└─ Bouskoura Z.I.</option>
             <option value="Rabat">Rabat</option>
             <option value="Marrakech">Marrakech</option>
             <option value="Tanger">Tanger</option>

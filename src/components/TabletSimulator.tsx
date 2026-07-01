@@ -90,19 +90,27 @@ export default function TabletSimulator({ onLeadSubmitted }: TabletSimulatorProp
   const [showPrizeOverlay, setShowPrizeOverlay] = useState<boolean>(false);
 
   // Lead collection
-  const [leadInfo, setLeadInfo] = useState<LeadInfo & { casaLocation?: string }>({
-    lastName: "",
-    firstName: "",
-    phone: "",
-    email: "",
-    city: "Casablanca",
-    casaLocation: "Casa Finance City",
-    company: ""
+  const [leadInfo, setLeadInfo] = useState<LeadInfo & { casaLocation?: string }>(() => {
+    const initialKiosk = typeof window !== "undefined" ? localStorage.getItem("kiosk_location") || "Casa Finance City" : "Casa Finance City";
+    return {
+      lastName: "",
+      firstName: "",
+      phone: "",
+      email: "",
+      city: "Casablanca",
+      casaLocation: initialKiosk,
+      company: ""
+    };
   });
-  const [kioskLocation, setKioskLocation] = useState<string>("Casa Finance City");
+  const [kioskLocation, setKioskLocation] = useState<string>(() => {
+    return typeof window !== "undefined" ? localStorage.getItem("kiosk_location") || "Casa Finance City" : "Casa Finance City";
+  });
 
-  // Synchronize leadInfo defaults with selected kiosk location
+  // Synchronize leadInfo defaults with selected kiosk location and persist to localStorage
   useEffect(() => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem("kiosk_location", kioskLocation);
+    }
     setLeadInfo(prev => ({ ...prev, city: "Casablanca", casaLocation: kioskLocation }));
   }, [kioskLocation]);
 
