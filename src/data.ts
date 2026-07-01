@@ -6,8 +6,8 @@ export const DEMO_PROFILES: DemoProfile[] = [
     name: "Mehdi",
     gender: "M",
     age: 25,
-    youngPhoto: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=500&auto=format&fit=crop&q=80",
-    oldPhoto: "https://images.unsplash.com/photo-1566492031773-4f4e44671857?w=500&auto=format&fit=crop&q=80",
+    youngPhoto: "/src/assets/images/young_man_transformation_1782896873632.jpg",
+    oldPhoto: "/src/assets/images/aged_man_transformation_1782896891240.jpg",
     quote: "Le futur dépend entièrement des décisions que vous prenez aujourd'hui."
   },
   {

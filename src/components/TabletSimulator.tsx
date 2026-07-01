@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { 
   Camera, ArrowLeft, ArrowRight, ChevronRight, Check, Award, RefreshCw, 
-  Sparkles, Monitor, ShieldCheck, Mail, Phone, User, Briefcase, QrCode, Play
+  Sparkles, Monitor, ShieldCheck, Mail, Phone, User, Briefcase, QrCode, Play, Settings
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { AppStep, DiagnosticAnswers, LeadInfo, AnalysisResult } from "../types";
@@ -19,6 +19,7 @@ export default function TabletSimulator({ onLeadSubmitted }: TabletSimulatorProp
   const [username, setUsername] = useState<string>("Mehdi");
   const [userage, setUserage] = useState<number>(25);
   const [selectedProfileId, setSelectedProfileId] = useState<string>("mehdi");
+  const [showBorneConfig, setShowBorneConfig] = useState<boolean>(false);
   
   // Photo capture states
   const [originalPhoto, setOriginalPhoto] = useState<string>(DEMO_PROFILES[0].youngPhoto);
@@ -464,63 +465,8 @@ export default function TabletSimulator({ onLeadSubmitted }: TabletSimulatorProp
   };
 
   return (
-    <div className="flex flex-col items-center justify-center py-4" id="tablet-simulator">
-      
-      {/* Configuration de la Borne d'Activation */}
-      <div className="w-full max-w-lg mb-6 bg-[#1F3566]/5 border border-[#1F3566]/10 rounded-2xl p-4 flex flex-col gap-2 shadow-sm text-[#1F3566]">
-        <div className="flex items-center justify-between">
-          <span className="text-xs font-bold uppercase tracking-wider flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-[#7CB342] animate-ping" />
-            Configuration de la Borne
-          </span>
-          <span className="text-[10px] font-mono bg-[#1F3566]/10 text-[#1F3566] px-2.5 py-0.5 rounded-full font-bold">
-            STATUT : ACTIF
-          </span>
-        </div>
-        <div className="grid grid-cols-1 gap-2">
-          <div>
-            <label className="text-[10px] font-semibold text-slate-500 block mb-1">Localisation de cette Borne CIMR :</label>
-            <select
-              value={kioskLocation}
-              onChange={(e) => setKioskLocation(e.target.value)}
-              className="w-full bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-xs font-medium text-slate-700 focus:outline-none focus:ring-1 focus:ring-[#1F3566] cursor-pointer shadow-sm"
-            >
-              <optgroup label="Zones d'Activation Grand Casablanca">
-                <option value="Casa Finance City">Pôle Finance : Casa Finance City</option>
-                <option value="Casanearshore">Pôle Finance : Casanearshore</option>
-                <option value="Zerktouni">Pôle Tertiaire : Zerktouni</option>
-                <option value="Anfa">Pôle Tertiaire : Anfa</option>
-                <option value="Racine">Pôle Tertiaire : Racine</option>
-                <option value="Gauthier">Pôle Tertiaire : Gauthier</option>
-                <option value="Ain Sebaa">Pôle Industriel Nord : Ain Sebaa</option>
-                <option value="Zenata">Pôle Industriel Nord : Zenata</option>
-                <option value="Berrechid">Pôle Industriel Est : Berrechid</option>
-                <option value="Bouskoura Zone Industrielle">Pôle Industriel Sud : Bouskoura Z.I.</option>
-              </optgroup>
-            </select>
-          </div>
-        </div>
-        <p className="text-[10px] text-slate-400 leading-relaxed italic">
-          * Les participants qui commencent ou soumettent un bilan sur cette borne seront rattachés à la zone/escale sélectionnée ci-dessus.
-        </p>
-      </div>
-
-      {/* Tablet Metal Outer Bezel (Styled exactly like iPad Pro) */}
-      <div className="w-full max-w-lg bg-[#1F3566] rounded-[48px] p-4 shadow-2xl border-[10px] border-slate-800 relative ring-4 ring-slate-900/10 overflow-hidden">
-        
-        {/* Tablet camera lens and sensor */}
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-24 h-4 bg-slate-800 rounded-b-2xl flex items-center justify-center z-40">
-          <div className="w-2 h-2 rounded-full bg-slate-900" />
-          <div className="w-1.5 h-1.5 rounded-full bg-blue-900/80 ml-2 animate-pulse" />
-        </div>
-
-        {/* Glossy Reflection highlight overlay */}
-        <div className="absolute top-0 right-0 w-1/2 h-full bg-gradient-to-tr from-white/0 via-white/2 to-white/0 transform rotate-12 pointer-events-none z-30" />
-
-        {/* Simulated Screen Body (iPad aspect ratio) */}
-        <div className="bg-[#050A18] w-full rounded-[36px] overflow-hidden min-h-[640px] p-6 sm:p-8 flex flex-col justify-between relative text-white">
-          
-          <AnimatePresence mode="wait">
+    <div className="flex-1 flex flex-col justify-between relative text-white h-full" id="tablet-simulator-inner">
+      <AnimatePresence mode="wait">
             
             {/* STEP 1: WELCOME SCREEN (ACCUEIL) */}
             {step === AppStep.ACCUEIL && (
@@ -602,6 +548,45 @@ export default function TabletSimulator({ onLeadSubmitted }: TabletSimulatorProp
                     <ChevronRight className="w-4 h-4" />
                   </button>
                   <p className="text-[8px] text-center text-slate-500 uppercase tracking-widest mt-2">🔒 CONFORME CNDP MAROC</p>
+
+                  {/* Collapsible Borne Configuration Panel inside Kiosk */}
+                  <div className="mt-4 pt-4 border-t border-white/5">
+                    <button
+                      type="button"
+                      onClick={() => setShowBorneConfig(!showBorneConfig)}
+                      className="w-full text-[10px] text-slate-400 hover:text-slate-200 font-mono flex items-center justify-center gap-1.5 transition cursor-pointer"
+                    >
+                      <Settings className="w-3.5 h-3.5" />
+                      <span>{showBorneConfig ? "Masquer la Borne" : `Borne : ${kioskLocation}`}</span>
+                    </button>
+
+                    {showBorneConfig && (
+                      <div className="mt-2.5 p-3 bg-white/5 border border-white/10 rounded-xl text-left space-y-2 animate-in slide-in-from-top-2 duration-150">
+                        <label className="text-[9px] font-bold text-slate-300 uppercase tracking-wider block">Localisation de cette Borne :</label>
+                        <select
+                          value={kioskLocation}
+                          onChange={(e) => setKioskLocation(e.target.value)}
+                          className="w-full bg-[#1F3566] border border-white/15 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-white focus:outline-none cursor-pointer shadow-sm"
+                        >
+                          <optgroup label="Zones d'Activation Grand Casablanca">
+                            <option value="Casa Finance City">Pôle Finance : Casa Finance City</option>
+                            <option value="Casanearshore">Pôle Finance : Casanearshore</option>
+                            <option value="Zerktouni">Pôle Tertiaire : Zerktouni</option>
+                            <option value="Anfa">Pôle Tertiaire : Anfa</option>
+                            <option value="Racine">Pôle Tertiaire : Racine</option>
+                            <option value="Gauthier">Pôle Tertiaire : Gauthier</option>
+                            <option value="Ain Sebaa">Pôle Industriel Nord : Ain Sebaa</option>
+                            <option value="Zenata">Pôle Industriel Nord : Zenata</option>
+                            <option value="Berrechid">Pôle Industriel Est : Berrechid</option>
+                            <option value="Bouskoura Zone Industrielle">Pôle Industriel Sud : Bouskoura Z.I.</option>
+                          </optgroup>
+                        </select>
+                        <p className="text-[8px] text-slate-400 italic leading-normal">
+                          * Les leads enregistrés sur cette borne seront affectés à la zone d'activation sélectionnée.
+                        </p>
+                      </div>
+                    )}
+                  </div>
                 </div>
 
               </motion.div>
@@ -1157,20 +1142,6 @@ export default function TabletSimulator({ onLeadSubmitted }: TabletSimulatorProp
             )}
 
           </AnimatePresence>
-          
-          {/* Tablet Virtual Physical Home Button */}
-          <div className="absolute bottom-2 left-1/2 -translate-x-1/2">
-            <button
-              onClick={handleRestart}
-              className="w-9 h-9 rounded-full bg-slate-950 border border-white/15 flex items-center justify-center hover:border-white/30 hover:bg-black transition active:scale-95 cursor-pointer shadow-inner"
-              title="Simulator Home Button"
-            >
-              <div className="w-2.5 h-2.5 rounded bg-white/10 border border-white/20 animate-pulse" />
-            </button>
-          </div>
-
-        </div>
-      </div>
     </div>
   );
 }
